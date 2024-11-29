@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat WebSocket</title>
+  <style>
+    /* Tu CSS existente */
+    /* ... */
+  </style>
+</head>
+<body>
+  <div id="chat-container">
+    <div id="username-container">
+      <label for="username">Introduce tu nombre de usuario:</label>
+      <input type="text" id="username" placeholder="Tu nombre...">
+      <button id="set-username">Establecer Nombre</button>
+    </div>
+
+    <h1>Chat WebSocket</h1>
+    <div id="messages-container">
+      <!-- Los mensajes se mostrarán aquí -->
+    </div>
+    <textarea id="message-input" placeholder="Escribe un mensaje..."></textarea>
+    <button id="send-message" disabled>Enviar</button>
+  </div>
+
+  <script>
+    let username = '';
+    const socket = new WebSocket("ws://localhost:8080/chat");
+
+    // Elementos del DOM
+    const usernameInput = document.getElementById("username");
+    const setUsernameButton = document.getElementById("set-username");
+    const messageInput = document.getElementById("message-input");
+    const sendButton = document.getElementById("send-message");
+    const messagesContainer = document.getElementById("messages-container");
+    const usernameContainer = document.getElementById("username-container");
+
+    // Función para mostrar los mensajes en el chat
+    function displayMessage(message) {
+      const messageElement = document.createElement("div");
+      messageElement.textContent = message;
+      messagesContainer.appendChild(messageElement);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight; // Para que siempre se vea el último mensaje
+    }
+
+    // Función para activar/desactivar el botón de enviar
+    function toggleSendButton() {
+      sendButton.disabled = !username || messageInput.value.trim() === "";
+    }
+
+    // Función para establecer el nombre de usuario
+    setUsernameButton.addEventListener("click", function() {
+      username = usernameInput.value.trim();
+      if (username) {
+        usernameContainer.style.display = 'none';  // Ocultar la entrada de nombre
+        messageInput.focus();  // Focus en el campo de mensaje
+        sendButton.disabled = false;  // Habilitar el botón de enviar
+        console.log("Nombre de usuario establecido:", username);
+      }
+    });
+
+    // Conexión WebSocket
+    socket.onopen = function () {
+      console.log("Conectado al servidor WebSocket");
+      displayMessage("Sistema: Conectado al chat.");
+    };
+
+    socket.onmessage = function (event) {
+      // Manejar mensajes de aplicación especiales
+      if (event.data === "pong") {
+        displayMessage("Sistema: Pong recibido del servidor.");
+      } else {
+        displayMessage(event.data);  // Mostrar mensajes de otros usuarios o del sistema
+      }
+    };
+
+    socket.onerror = function (error) {
+      console.error("Error en la conexión WebSocket:", error);
+      displayMessage("Sistema: Error en la conexión WebSocket.");
+    };
+
+    socket.onclose = function () {
+      console.log("Conexión WebSocket cerrada");
+      displayMessage("Sistema: Conexión WebSocket cerrada.");
+    };
+
+    // Función para enviar mensaje
+    function sendMessage() {
+      const message = messageInput.value.trim();
+      if (message && username) {
+        // Verificar si el mensaje es un comando especial
+        if (message.toLowerCase() === "ping") {
+          // Enviar un mensaje de aplicación "ping"
+          socket.send("ping");
+          displayMessage("Tú: Ping enviado al servidor.");
+        } else {
+          socket.send(`${username}: ${message}`);  // Enviar el mensaje con el nombre de usuario
+          displayMessage(`Tú: ${message}`);
+        }
+        messageInput.value = "";
+        toggleSendButton();
+      }
+    }
+
+    // Evento para enviar mensaje con el botón
+    sendButton.addEventListener("click", sendMessage);
+
+    // Evento para enviar mensaje con la tecla Enter
+    messageInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();  // Evitar el salto de línea
+        sendMessage();
+      }
+    });
+
+    // Habilitar/deshabilitar el botón de envío según el contenido del mensaje
+    messageInput.addEventListener("input", toggleSendButton);
+
+    // Implementar un heartbeat para mantener la conexión activa
+    setInterval(function() {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send("ping");  // Enviar un ping de aplicación cada 30 segundos
+        console.log("Ping enviado al servidor para mantener la conexión activa.");
+      }
+    }, 5000); // 30,000 ms = 30 segundos
+
+  </script>
+</body>
+</html>

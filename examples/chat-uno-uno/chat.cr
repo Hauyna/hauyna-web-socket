@@ -7,10 +7,10 @@ require "json"
 clients = {} of String => HTTP::WebSocket
 
 # Crear el router WebSocket
-router = Opal::WebSocket::Router.new
+router = Hauyna::WebSocket::Router.new
 
 # Definir la ruta WebSocket "/chat"
-router.websocket "/chat", Opal::WebSocket::Handler.new(
+router.websocket "/chat", Hauyna::WebSocket::Handler.new(
   # Cuando un cliente se conecta
   on_open: ->(socket : HTTP::WebSocket) do
     puts "Conexión WebSocket abierta: #{socket.object_id}"
@@ -39,7 +39,7 @@ router.websocket "/chat", Opal::WebSocket::Handler.new(
         # Guardar el socket en el Hash de 'clients'
         clients[user_id] = socket
         socket.send({type: "user_list", users: clients.keys}.to_json)
-        Opal::WebSocket::Events.trigger_event("user_set", socket, JSON.parse({"user_id" => user_id}.to_json))
+        Hauyna::WebSocket::Events.trigger_event("user_set", socket, JSON.parse({"user_id" => user_id}.to_json))
       elsif data["type"] == "chat_message"
         # Asegurarse de que los datos del mensaje son válidos
         sender = data["sender"]
@@ -94,7 +94,7 @@ router.websocket "/chat", Opal::WebSocket::Handler.new(
 # Registrar eventos personalizados
 
 # Evento cuando un nuevo usuario se conecta
-Opal::WebSocket::Events.on("user_set") do |socket, data|
+Hauyna::WebSocket::Events.on("user_set") do |socket, data|
   user_id = data["user_id"]
   puts "Usuario registrado con ID: #{user_id}"
   socket.send({type: "success", message: "Usuario #{user_id} registrado correctamente."}.to_json)
@@ -104,7 +104,7 @@ Opal::WebSocket::Events.on("user_set") do |socket, data|
 end
 
 # Evento para el chat, se envía cuando un mensaje es entregado con éxito
-Opal::WebSocket::Events.on("chat_message") do |socket, data|
+Hauyna::WebSocket::Events.on("chat_message") do |socket, data|
   sender = data["sender"]
   recipient = data["recipient"]
   message = data["message"]

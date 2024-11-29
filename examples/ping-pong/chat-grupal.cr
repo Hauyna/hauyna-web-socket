@@ -5,9 +5,9 @@ require "./../../src/opal-web-socket"
 clients = [] of HTTP::WebSocket
 
 # Crear el router WebSocket
-router = Opal::WebSocket::Router.new
+router = Hauyna::WebSocket::Router.new
 
-router.websocket "/chat", Opal::WebSocket::Handler.new(
+router.websocket "/chat", Hauyna::WebSocket::Handler.new(
   on_open: ->(socket : HTTP::WebSocket) do
     # Cuando un nuevo cliente se conecta, lo agregamos a la lista
     clients << socket

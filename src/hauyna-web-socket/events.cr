@@ -1,21 +1,48 @@
 require "json"
+require "http/web_socket"
+require "./connection_manager"
 
 module Hauyna
   module WebSocket
     module Events
-      @@event_handlers = {} of String => Proc(HTTP::WebSocket, JSON::Any | Hash(String, JSON::Any) | Hash(String, String), Nil)
+      alias EventCallback = Proc(HTTP::WebSocket, Hash(String, JSON::Any), Nil)
+      @@event_handlers = {} of String => Array(EventCallback)
 
-      def self.on(event_name : String, &block : Proc(HTTP::WebSocket, JSON::Any | Hash(String, JSON::Any) | Hash(String, String), Nil))
-        @@event_handlers[event_name] = block
+      # Registra un handler para un evento específico
+      def self.on(event : String, &block : EventCallback)
+        @@event_handlers[event] ||= [] of EventCallback
+        @@event_handlers[event] << block
       end
 
-      def self.trigger_event(event_name : String, socket : HTTP::WebSocket, data : JSON::Any | Hash(String, JSON::Any) | Hash(String, String))
-        handler = @@event_handlers[event_name]
-        if handler
-          handler.call(socket, data)
-        else
-          puts "No handler registered for event '#{event_name}'"
+      # Dispara un evento específico
+      def self.trigger_event(event : String, socket : HTTP::WebSocket, data : Hash(String, JSON::Any))
+        if handlers = @@event_handlers[event]?
+          handlers.each do |handler|
+            begin
+              handler.call(socket, data)
+            rescue ex
+              # Manejar el error silenciosamente o registrarlo según sea necesario
+              puts "Error en el manejador de eventos: #{ex.message}"
+            end
+          end
         end
+      end
+
+      # Métodos para enviar mensajes de manera genérica
+      def self.broadcast(content : String)
+        ConnectionManager.broadcast(content)
+      end
+
+      def self.send_to_one(identifier : String, content : String)
+        ConnectionManager.send_to_one(identifier, content)
+      end
+
+      def self.send_to_many(identifiers : Array(String), content : String)
+        ConnectionManager.send_to_many(identifiers, content)
+      end
+
+      def self.send_to_group(group_name : String, content : String)
+        ConnectionManager.send_to_group(group_name, content)
       end
     end
   end

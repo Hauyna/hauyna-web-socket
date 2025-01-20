@@ -1,58 +1,60 @@
+require "json"
+require "http/web_socket"
+require "./connection_manager"
+
 module Hauyna
   module WebSocket
     class Handler
-      property on_open_callback : Proc(HTTP::WebSocket, Nil)?
-      property on_message_callback : Proc(HTTP::WebSocket, String, Nil)?
-      property on_close_callback : Proc(HTTP::WebSocket, Nil)?
-      property on_ping_callback : Proc(HTTP::WebSocket, String, Nil)?
-      property on_pong_callback : Proc(HTTP::WebSocket, String, Nil)?
+      property on_open : Proc(HTTP::WebSocket, Hash(String, JSON::Any), Nil)?
+      property on_message : Proc(HTTP::WebSocket, String, Nil)?
+      property on_close : Proc(HTTP::WebSocket, Nil)?
+      property on_ping : Proc(HTTP::WebSocket, String, Nil)?
+      property on_pong : Proc(HTTP::WebSocket, String, Nil)?
+      property extract_identifier : Proc(HTTP::WebSocket, Hash(String, JSON::Any), String?)?
 
       def initialize(
-        on_open : Proc(HTTP::WebSocket, Nil)? = nil,
-        on_message : Proc(HTTP::WebSocket, String, Nil)? = nil,
-        on_close : Proc(HTTP::WebSocket, Nil)? = nil,
-        on_ping : Proc(HTTP::WebSocket, String, Nil)? = nil,
-        on_pong : Proc(HTTP::WebSocket, String, Nil)? = nil,
+        @on_open = nil,
+        @on_message = nil,
+        @on_close = nil,
+        @on_ping = nil,
+        @on_pong = nil,
+        @extract_identifier = nil
       )
-        @on_open_callback = on_open
-        @on_message_callback = on_message
-        @on_close_callback = on_close
-        @on_ping_callback = on_ping
-        @on_pong_callback = on_pong
       end
 
-      def on_open(socket : HTTP::WebSocket)
-        if @on_open_callback
-          open_callback = @on_open_callback.as(Proc(HTTP::WebSocket, Nil))
-          open_callback.call(socket)
+      def call(socket : HTTP::WebSocket, params : Hash(String, JSON::Any))
+        if identifier_proc = @extract_identifier
+          identifier = identifier_proc.call(socket, params)
+          ConnectionManager.register(socket, identifier) if identifier
         end
-      end
 
-      def on_message(socket : HTTP::WebSocket, message : String)
-        if @on_message_callback
-          message_callback = @on_message_callback.as(Proc(HTTP::WebSocket, String, Nil))
-          message_callback.call(socket, message)
+        if open_proc = @on_open
+          open_proc.call(socket, params)
         end
-      end
 
-      def on_close(socket : HTTP::WebSocket)
-        if @on_close_callback
-          close_callback = @on_close_callback.as(Proc(HTTP::WebSocket, Nil))
-          close_callback.call(socket)
+        socket.on_message do |message|
+          if message_proc = @on_message
+            message_proc.call(socket, message)
+          end
         end
-      end
 
-      def on_ping(socket : HTTP::WebSocket, message : String)
-        if @on_ping_callback
-          ping_callback = @on_ping_callback.as(Proc(HTTP::WebSocket, String, Nil))
-          ping_callback.call(socket, message)
+        socket.on_close do
+          if close_proc = @on_close
+            close_proc.call(socket)
+          end
+          ConnectionManager.unregister(socket)
         end
-      end
 
-      def on_pong(socket : HTTP::WebSocket, message : String)
-        if @on_pong_callback
-          pong_callback = @on_pong_callback.as(Proc(HTTP::WebSocket, String, Nil))
-          pong_callback.call(socket, message)
+        socket.on_ping do |message|
+          if ping_proc = @on_ping
+            ping_proc.call(socket, message)
+          end
+        end
+
+        socket.on_pong do |message|
+          if pong_proc = @on_pong
+            pong_proc.call(socket, message)
+          end
         end
       end
     end

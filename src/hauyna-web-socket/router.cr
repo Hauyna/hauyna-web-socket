@@ -1,56 +1,67 @@
 require "http"
+require "json"
+require "./handler"
 
 module Hauyna
   module WebSocket
     class Router
-      property websocket_routes : Array(WebSocketRoute)
-
       def initialize
-        @websocket_routes = [] of WebSocketRoute
+        @routes = {} of String => Handler
       end
 
       def websocket(path : String, handler : Handler)
-        @websocket_routes << WebSocketRoute.new(path, handler)
+        @routes[path] = handler
       end
 
       def call(context : HTTP::Server::Context) : Bool
         request = context.request
-        path = request.path
+        response = context.response
 
-        websocket_route = @websocket_routes.find { |r| r.match?(path) }
-
-        if websocket_route &&
-           request.headers["Upgrade"] == "websocket" &&
-           request.headers["Connection"].includes?("Upgrade")
-          begin
-            handler = websocket_route.handler
-
-            ws_handler = HTTP::WebSocketHandler.new do |socket, ctx|
-              handler.on_open(socket)
-              socket.on_message do |message|
-                handler.on_message(socket, message)
-              end
-              socket.on_close do
-                handler.on_close(socket)
-              end
-              socket.on_ping do |message|
-                handler.on_ping(socket, message)
-              end
-              socket.on_pong do |message|
-                handler.on_pong(socket, message)
-              end
+        if handler = match_route(request.path)
+          # Verificar si es una solicitud de WebSocket
+          if upgrade_websocket?(request)
+            # Extraer parámetros de la query
+            params = extract_params(request)
+            
+            # Crear un WebSocketHandler para manejar el handshake
+            ws_handler = HTTP::WebSocketHandler.new do |ws, ctx|
+              handler.call(ws, params)
             end
 
+            # Procesar la solicitud WebSocket
             ws_handler.call(context)
             return true
-          rescue ex : Exception
-            context.response.status_code = 500
-            context.response.print "Error: #{ex.message}"
-            return true
           end
-        else
-          return false
         end
+
+        false
+      end
+
+      private def match_route(path : String) : Handler?
+        @routes[path]?
+      end
+
+      private def upgrade_websocket?(request : HTTP::Request) : Bool
+        return false unless upgrade = request.headers["Upgrade"]?
+        return false unless upgrade.compare("websocket", case_insensitive: true) == 0
+        return false unless connection = request.headers["Connection"]?
+        return false unless connection.compare("Upgrade", case_insensitive: true) == 0
+        true
+      end
+
+      private def extract_params(request : HTTP::Request) : Hash(String, JSON::Any)
+        params = Hash(String, JSON::Any).new
+
+        if query = request.query
+          query.split('&').each do |param|
+            if param.includes?('=')
+              key, value = param.split('=', 2)
+              params[URI.decode_www_form(key)] = JSON::Any.new(URI.decode_www_form(value))
+            end
+          end
+        end
+
+        params
       end
     end
   end

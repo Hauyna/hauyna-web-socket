@@ -1,7 +1,4 @@
-require "./hauyna-web-socket/events"
-require "./hauyna-web-socket/router"
-require "./hauyna-web-socket/websocket_route"
-require "./hauyna-web-socket/handler"
+require "./hauyna-web-socket/*"
 
 module Hauyna
   module WebSocket

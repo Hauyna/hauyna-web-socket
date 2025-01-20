@@ -2,7 +2,7 @@ require "json"
 require "uri"
 require "http"
 
-require "./hauyna-web-socket"
+require "./src/hauyna-web-socket"
 
 # Definición del Handler con manejo de parámetros y patrones de mensajería
 chat_handler = Hauyna::WebSocket::Handler.new(

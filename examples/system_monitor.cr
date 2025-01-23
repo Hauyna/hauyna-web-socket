@@ -35,20 +35,20 @@ class SystemMetric
   
   private def get_memory_used : Int64
     # Simulación
-    (rand * 8 * 1024 * 1024 * 1024).to_i64
+    (rand * 16 * 1024 * 1024 * 1024).to_i64
   end
   
   private def get_memory_total : Int64
-    16 * 1024 * 1024 * 1024_i64 # 16GB
+    (16_i64 * 1024_i64 * 1024_i64 * 1024_i64) # 16GB como Int64
   end
   
   private def get_disk_used : Int64
     # Simulación
-    (rand * 200 * 1024 * 1024 * 1024).to_i64
+    (rand * 512 * 1024 * 1024 * 1024).to_i64
   end
   
   private def get_disk_total : Int64
-    512 * 1024 * 1024 * 1024_i64 # 512GB
+    (512_i64 * 1024_i64 * 1024_i64 * 1024_i64) # 512GB como Int64
   end
   
   private def get_network_rx : Int64
@@ -89,6 +89,9 @@ class Monitor
   property alerts : Array(Alert)
   property users : Hash(String, String)
   
+  MAX_METRICS = 60
+  MAX_ALERTS = 10
+  
   def initialize
     @metrics = [] of SystemMetric
     @alerts = [] of Alert
@@ -103,8 +106,10 @@ class Monitor
     metric = SystemMetric.new
     @metrics << metric
     
-    # Mantener solo las últimas 60 mediciones
-    @metrics = @metrics.last(60)
+    # Mantener solo las últimas MAX_METRICS mediciones
+    if @metrics.size > MAX_METRICS
+      @metrics = @metrics[-MAX_METRICS..]
+    end
     
     # Verificar alertas
     check_alerts(metric)
@@ -122,8 +127,10 @@ class Monitor
       @alerts << Alert.new("Memory", "Memoria crítica: #{memory_percent.round(2)}%")
     end
     
-    # Mantener solo las últimas 10 alertas
-    @alerts = @alerts.last(10)
+    # Mantener solo las últimas MAX_ALERTS alertas
+    if @alerts.size > MAX_ALERTS
+      @alerts = @alerts[-MAX_ALERTS..]
+    end
   end
 end
 
@@ -150,17 +157,15 @@ server = HTTP::Server.new do |context|
   }
 
   handler.on_open = ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
-    if user_id = params["user_id"]?.try(&.as_s)
-      if name = params["name"]?.try(&.as_s)
-        monitor.add_user(user_id, name)
-        Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "monitors")
-        
-        socket.send({
-          type: "init",
-          metrics: monitor.metrics,
-          alerts: monitor.alerts
-        }.to_json)
-      end
+    if (user_id = params["user_id"]?.try(&.as_s)) && (name = params["name"]?.try(&.as_s))
+      monitor.add_user(user_id, name)
+      Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "monitors")
+      
+      socket.send({
+        type: "init",
+        metrics: monitor.metrics[-60..] || monitor.metrics, # Usar || para manejar arrays pequeños
+        alerts: monitor.alerts[-10..] || monitor.alerts
+      }.to_json)
     end
   }
 
@@ -174,7 +179,7 @@ server = HTTP::Server.new do |context|
       Hauyna::WebSocket::Events.send_to_group("monitors", {
         type: "metrics_update",
         metric: metric,
-        alerts: monitor.alerts
+        alerts: monitor.alerts[-10..] || monitor.alerts
       }.to_json)
     end
   end
@@ -298,6 +303,7 @@ server = HTTP::Server.new do |context|
             let ws;
             let cpuChart, memoryChart, diskChart, networkChart;
             let metrics = [];
+            const MAX_POINTS = 60;
             
             function formatBytes(bytes) {
               const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -331,6 +337,9 @@ server = HTTP::Server.new do |context|
                     y: {
                       beginAtZero: true
                     }
+                  },
+                  animation: {
+                    duration: 0 // Desactivar animaciones para mejor rendimiento
                   }
                 }
               });
@@ -339,43 +348,36 @@ server = HTTP::Server.new do |context|
             function updateCharts(metric) {
               const time = new Date(metric.timestamp).toLocaleTimeString();
               
-              // CPU
-              cpuChart.data.labels.push(time);
-              cpuChart.data.datasets[0].data.push(metric.cpu_usage);
-              if (cpuChart.data.labels.length > 60) {
-                cpuChart.data.labels.shift();
-                cpuChart.data.datasets[0].data.shift();
+              function updateChartData(chart, value) {
+                // Agregar nuevo punto
+                metrics.push({time, value});
+                
+                // Mantener solo los últimos MAX_POINTS
+                if (metrics.length > MAX_POINTS) {
+                  metrics = metrics.slice(-MAX_POINTS);
+                }
+                
+                // Actualizar la gráfica con todos los puntos
+                chart.data.labels = metrics.map(m => m.time);
+                chart.data.datasets[0].data = metrics.map(m => m.value);
+                
+                chart.update('none');
               }
-              cpuChart.update();
+              
+              // CPU
+              updateChartData(cpuChart, metric.cpu_usage);
               
               // Memoria
               const memoryPercent = (metric.memory_used / metric.memory_total) * 100;
-              memoryChart.data.labels.push(time);
-              memoryChart.data.datasets[0].data.push(memoryPercent);
-              if (memoryChart.data.labels.length > 60) {
-                memoryChart.data.labels.shift();
-                memoryChart.data.datasets[0].data.shift();
-              }
-              memoryChart.update();
+              updateChartData(memoryChart, memoryPercent);
               
               // Disco
               const diskPercent = (metric.disk_used / metric.disk_total) * 100;
-              diskChart.data.labels.push(time);
-              diskChart.data.datasets[0].data.push(diskPercent);
-              if (diskChart.data.labels.length > 60) {
-                diskChart.data.labels.shift();
-                diskChart.data.datasets[0].data.shift();
-              }
-              diskChart.update();
+              updateChartData(diskChart, diskPercent);
               
               // Red
-              networkChart.data.labels.push(time);
-              networkChart.data.datasets[0].data.push(metric.network_rx / 1024 / 1024);
-              if (networkChart.data.labels.length > 60) {
-                networkChart.data.labels.shift();
-                networkChart.data.datasets[0].data.shift();
-              }
-              networkChart.update();
+              const networkMBps = metric.network_rx / (1024 * 1024);
+              updateChartData(networkChart, networkMBps);
             }
             
             function updateProcesses(processes) {
@@ -399,6 +401,38 @@ server = HTTP::Server.new do |context|
                   \${alert.type}: \${alert.message}
                 </div>
               \`).join('');
+            }
+            
+            function handleMessage(event) {
+              const data = JSON.parse(event.data);
+              
+              switch(data.type) {
+                case 'init':
+                  // Reiniciar métricas
+                  metrics = [];
+                  
+                  // Limpiar gráficas
+                  [cpuChart, memoryChart, diskChart, networkChart].forEach(chart => {
+                    chart.data.labels = [];
+                    chart.data.datasets[0].data = [];
+                    chart.update('none');
+                  });
+                  
+                  // Inicializar con datos históricos
+                  if (data.metrics && data.metrics.length > 0) {
+                    data.metrics.forEach(updateCharts);
+                  }
+                  updateAlerts(data.alerts || []);
+                  break;
+                  
+                case 'metrics_update':
+                  if (data.metric) {
+                    updateCharts(data.metric);
+                    updateProcesses(data.metric.processes || []);
+                  }
+                  updateAlerts(data.alerts || []);
+                  break;
+              }
             }
             
             function joinMonitor() {
@@ -433,32 +467,7 @@ server = HTTP::Server.new do |context|
                 \`ws://localhost:8080/monitor?user_id=\${userId}&name=\${name}\`
               );
               
-              ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                
-                switch(data.type) {
-                  case 'init':
-                    metrics = data.metrics;
-                    metrics.forEach(updateCharts);
-                    if (metrics.length > 0) {
-                      updateProcesses(metrics[metrics.length - 1].processes);
-                    }
-                    updateAlerts(data.alerts);
-                    break;
-                    
-                  case 'metrics_update':
-                    metrics.push(data.metric);
-                    if (metrics.length > 60) metrics.shift();
-                    updateCharts(data.metric);
-                    updateProcesses(data.metric.processes);
-                    updateAlerts(data.alerts);
-                    break;
-                    
-                  case 'error':
-                    console.error(data.message);
-                    break;
-                }
-              };
+              ws.onmessage = handleMessage;
             }
           </script>
         </body>

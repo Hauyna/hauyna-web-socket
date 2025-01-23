@@ -9,15 +9,17 @@ class Seat
   property id : String # A1, A2, B1, B2, etc.
   property row : String
   property number : Int32
-  property status : String # available, reserved, occupied, disabled
+  property status : String # available, reserved, occupied, disabled, pending
   property reservation_id : String?
   property user_id : String?
+  property pending_user_id : String? # Usuario que está considerando el asiento
   
   def initialize(@row : String, @number : Int32)
     @id = "#{@row}#{@number}"
     @status = "available"
     @reservation_id = nil
     @user_id = nil
+    @pending_user_id = nil
   end
 end
 
@@ -63,11 +65,15 @@ class Screening
     return false unless @users[user_id]?
     
     seats_to_reserve = @seats.select { |s| seat_ids.includes?(s.id) }
-    return false if seats_to_reserve.any? { |s| s.status != "available" }
+    # Solo permitir reservar asientos disponibles o pendientes por el mismo usuario
+    return false if seats_to_reserve.any? { |s| 
+      s.status != "available" && !(s.status == "pending" && s.pending_user_id == user_id)
+    }
     
     seats_to_reserve.each do |seat|
       seat.status = "reserved"
       seat.user_id = user_id
+      seat.pending_user_id = nil
       @reservations[user_id] << seat.id
     end
     
@@ -85,6 +91,63 @@ class Screening
       seat.status = "available"
       seat.user_id = nil
       @reservations[user_id].delete(seat.id)
+    end
+    
+    true
+  end
+  
+  def mark_seats_pending(user_id : String, seat_ids : Array(String)) : Bool
+    return false unless @users[user_id]?
+    
+    seats_to_mark = @seats.select { |s| seat_ids.includes?(s.id) }
+    
+    # Verificar si todos los asientos están disponibles o ya están pendientes por el mismo usuario
+    return false if seats_to_mark.any? { |s| 
+      s.status != "available" && !(s.status == "pending" && s.pending_user_id == user_id)
+    }
+    
+    # Si llegamos aquí, podemos marcar todos los asientos
+    seats_to_mark.each do |seat|
+      seat.status = "pending"
+      seat.pending_user_id = user_id
+    end
+    
+    true
+  end
+  
+  def unmark_seats_pending(user_id : String)
+    @seats.each do |seat|
+      if seat.pending_user_id == user_id && seat.status == "pending"
+        seat.status = "available"
+        seat.pending_user_id = nil
+      end
+    end
+  end
+  
+  def cleanup_stale_pending_seats(user_id : String)
+    # Limpiar asientos pendientes antiguos del usuario
+    @seats.each do |seat|
+      if seat.pending_user_id == user_id && seat.status == "pending"
+        seat.status = "available"
+        seat.pending_user_id = nil
+      end
+    end
+  end
+  
+  def add_to_reservation(user_id : String, seat_ids : Array(String)) : Bool
+    return false unless @users[user_id]?
+    
+    seats_to_add = @seats.select { |s| seat_ids.includes?(s.id) }
+    # Solo permitir agregar asientos disponibles o pendientes por el mismo usuario
+    return false if seats_to_add.any? { |s| 
+      s.status != "available" && !(s.status == "pending" && s.pending_user_id == user_id)
+    }
+    
+    seats_to_add.each do |seat|
+      seat.status = "reserved"
+      seat.user_id = user_id
+      seat.pending_user_id = nil
+      @reservations[user_id] << seat.id
     end
     
     true
@@ -124,10 +187,39 @@ server = HTTP::Server.new do |context|
       begin
         data = JSON.parse(message)
         case data["type"]?.try(&.as_s)
+        when "mark_pending"
+          seat_ids = data["seat_ids"].as_a.map(&.as_s)
+          
+          # Primero limpiar cualquier selección pendiente antigua
+          screening.cleanup_stale_pending_seats(user_id)
+          
+          if screening.mark_seats_pending(user_id, seat_ids)
+            Hauyna::WebSocket::Events.send_to_group("viewers", {
+              type: "seats_update",
+              seats: screening.seats
+            }.to_json)
+          else
+            # Enviar error al cliente si no se pudo marcar
+            socket.send({
+              type: "error",
+              message: "No se pueden seleccionar estos asientos"
+            }.to_json)
+          end
+          
+        when "unmark_pending"
+          seat_ids = data["seat_ids"].as_a.map(&.as_s)
+          screening.unmark_seats_pending(user_id)
+          
+          Hauyna::WebSocket::Events.send_to_group("viewers", {
+            type: "seats_update",
+            seats: screening.seats
+          }.to_json)
+          
         when "reserve_seats"
           seat_ids = data["seat_ids"].as_a.map(&.as_s)
           
           if screening.reserve_seats(user_id, seat_ids)
+            screening.unmark_seats_pending(user_id)
             Hauyna::WebSocket::Events.send_to_group("viewers", {
               type: "seats_update",
               seats: screening.seats
@@ -141,6 +233,22 @@ server = HTTP::Server.new do |context|
             Hauyna::WebSocket::Events.send_to_group("viewers", {
               type: "seats_update",
               seats: screening.seats
+            }.to_json)
+          end
+          
+        when "add_to_reservation"
+          seat_ids = data["seat_ids"].as_a.map(&.as_s)
+          
+          if screening.add_to_reservation(user_id, seat_ids)
+            screening.unmark_seats_pending(user_id)
+            Hauyna::WebSocket::Events.send_to_group("viewers", {
+              type: "seats_update",
+              seats: screening.seats
+            }.to_json)
+          else
+            socket.send({
+              type: "error",
+              message: "No se pueden agregar estos asientos a tu reserva"
             }.to_json)
           end
         end
@@ -200,6 +308,7 @@ server = HTTP::Server.new do |context|
             .seat.reserved {
               background: #f44336;
               color: white;
+              cursor: not-allowed;
             }
             .seat.disabled {
               background: #9e9e9e;
@@ -207,6 +316,16 @@ server = HTTP::Server.new do |context|
               cursor: not-allowed;
             }
             .seat.selected {
+              border: 3px solid #FFC107;
+              box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+            }
+            .seat.pending {
+              background: #9e9e9e;
+              color: white;
+              opacity: 0.7;
+              cursor: not-allowed;
+            }
+            .seat.pending-mine {
               background: #2196F3;
               color: white;
             }
@@ -239,6 +358,31 @@ server = HTTP::Server.new do |context|
               color: red;
               margin: 10px 0;
             }
+            .seat:hover {
+              transform: scale(1.1);
+              transition: transform 0.2s;
+            }
+            .seat[style*="not-allowed"]:hover {
+              transform: none;
+            }
+            .current-reservation {
+              background: #f5f5f5;
+              padding: 20px;
+              border-radius: 5px;
+              margin-top: 20px;
+            }
+            .cancel-all {
+              margin-top: 15px;
+              background: #f44336;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+            }
+            .cancel-all:hover {
+              background: #d32f2f;
+            }
           </style>
         </head>
         <body>
@@ -261,7 +405,7 @@ server = HTTP::Server.new do |context|
                 </div>
                 <div class="legend-item">
                   <div class="legend-color" style="background: #f44336"></div>
-                  <span>Ocupado</span>
+                  <span>Reservado</span>
                 </div>
                 <div class="legend-item">
                   <div class="legend-color" style="background: #9e9e9e"></div>
@@ -271,12 +415,16 @@ server = HTTP::Server.new do |context|
                   <div class="legend-color" style="background: #2196F3"></div>
                   <span>Seleccionado</span>
                 </div>
+                <div class="legend-item">
+                  <div class="legend-color" style="background: #9e9e9e; opacity: 0.7"></div>
+                  <span>Seleccionado por otro</span>
+                </div>
               </div>
               
               <div id="seats" class="seats"></div>
               
               <div style="text-align: center; margin: 20px 0;">
-                <button onclick="reserveSelected()">Reservar Asientos Seleccionados</button>
+                <button onclick="reserveSelected()" id="reserveButton">Reservar Asientos Seleccionados</button>
               </div>
               
               <div class="my-reservations">
@@ -291,6 +439,7 @@ server = HTTP::Server.new do |context|
             let ws;
             let screening;
             let selectedSeats = new Set();
+            let hasExistingReservation = false;
             
             function joinCinema() {
               const name = document.getElementById('name').value.trim();
@@ -308,26 +457,55 @@ server = HTTP::Server.new do |context|
             
             function toggleSeat(seatId) {
               const seat = screening.seats.find(s => s.id === seatId);
-              if (!seat || seat.status !== 'available') return;
+              if (!seat) return;
               
-              if (selectedSeats.has(seatId)) {
-                selectedSeats.delete(seatId);
-              } else {
-                selectedSeats.add(seatId);
+              // No permitir interactuar con asientos reservados o deshabilitados
+              if (seat.status === 'reserved' || seat.status === 'disabled') return;
+              
+              // No permitir seleccionar asientos pendientes de otros usuarios
+              if (seat.status === 'pending' && seat.pending_user_id !== userId) {
+                showError('Este asiento está siendo seleccionado por otro usuario');
+                return;
               }
               
-              updateSeats();
+              const currentSelection = new Set(selectedSeats);
+              
+              if (selectedSeats.has(seatId)) {
+                currentSelection.delete(seatId);
+              } else {
+                currentSelection.add(seatId);
+              }
+              
+              // Enviar toda la selección actual
+              ws.send(JSON.stringify({
+                type: 'mark_pending',
+                seat_ids: Array.from(currentSelection)
+              }));
+              
+              selectedSeats = currentSelection;
+            }
+            
+            function showError(message) {
+              const error = document.getElementById('error');
+              error.textContent = message;
+              setTimeout(() => error.textContent = '', 3000);
+            }
+            
+            function updateReserveButton() {
+              const button = document.getElementById('reserveButton');
+              button.textContent = hasExistingReservation ? 
+                'Agregar Asientos a mi Reserva' : 
+                'Reservar Asientos Seleccionados';
             }
             
             function reserveSelected() {
               if (selectedSeats.size === 0) return;
               
+              const seatIds = Array.from(selectedSeats);
               ws.send(JSON.stringify({
-                type: 'reserve_seats',
-                seat_ids: Array.from(selectedSeats)
+                type: hasExistingReservation ? 'add_to_reservation' : 'reserve_seats',
+                seat_ids: seatIds
               }));
-              
-              selectedSeats.clear();
             }
             
             function cancelReservation(seatIds) {
@@ -341,19 +519,55 @@ server = HTTP::Server.new do |context|
             
             function updateSeats() {
               const seatsDiv = document.getElementById('seats');
-              seatsDiv.innerHTML = screening.seats.map(seat => \`
-                <div class="seat \${seat.status} \${selectedSeats.has(seat.id) ? 'selected' : ''}"
-                     onclick="toggleSeat('\${seat.id}')">
-                  \${seat.id}
-                </div>
-              \`).join('');
+              seatsDiv.innerHTML = screening.seats.map(seat => {
+                let seatClass = seat.status;
+                
+                // Manejar estados especiales
+                if (seat.status === 'pending') {
+                  if (seat.pending_user_id === userId) {
+                    seatClass = 'pending-mine';
+                  } else {
+                    seatClass = 'pending';
+                  }
+                }
+                
+                // Agregar clase selected si está en nuestra selección
+                if (selectedSeats.has(seat.id)) {
+                  seatClass += ' selected';
+                }
+                
+                let isClickable = seat.status === 'available' || 
+                                (seat.status === 'pending' && seat.pending_user_id === userId) ||
+                                selectedSeats.has(seat.id);
+                
+                return `
+                  <div class="seat ${seatClass}"
+                       onclick="toggleSeat('${seat.id}')"
+                       style="cursor: ${isClickable ? 'pointer' : 'not-allowed'}"
+                       title="${getTooltip(seat)}">
+                    ${seat.id}
+                  </div>
+                `;
+              }).join('');
+            }
+            
+            function getTooltip(seat) {
+              if (seat.status === 'reserved') return 'Asiento reservado';
+              if (seat.status === 'disabled') return 'Asiento no disponible';
+              if (seat.status === 'pending' && seat.pending_user_id !== userId) {
+                return 'Asiento seleccionado por otro usuario';
+              }
+              return 'Haz clic para seleccionar';
             }
             
             function updateReservations() {
               const reservationsDiv = document.getElementById('reservations');
               const mySeats = screening.seats.filter(s => s.user_id === userId);
               
-              if (mySeats.length === 0) {
+              hasExistingReservation = mySeats.length > 0;
+              updateReserveButton();
+              
+              if (!hasExistingReservation) {
                 reservationsDiv.innerHTML = '<p>No tienes reservas activas</p>';
                 return;
               }
@@ -364,15 +578,19 @@ server = HTTP::Server.new do |context|
                 return acc;
               }, {});
               
-              reservationsDiv.innerHTML = Object.entries(groupedByRow)
-                .map(([row, seats]) => \`
-                  <div class="reservation">
-                    <div>Fila \${row}: \${seats.map(s => s.number).join(', ')}</div>
-                    <button onclick="cancelReservation(\${JSON.stringify(seats.map(s => s.id))})">
-                      Cancelar
-                    </button>
-                  </div>
-                \`).join('');
+              reservationsDiv.innerHTML = `
+                <div class="current-reservation">
+                  ${Object.entries(groupedByRow).map(([row, seats]) => `
+                    <div class="reservation">
+                      <div>Fila ${row}: ${seats.map(s => s.number).join(', ')}</div>
+                    </div>
+                  `).join('')}
+                  <button onclick='cancelReservation(${JSON.stringify(mySeats.map(s => s.id))})' 
+                          class="cancel-all">
+                    Cancelar Toda la Reserva
+                  </button>
+                </div>
+              `;
             }
             
             function handleMessage(event) {
@@ -387,12 +605,24 @@ server = HTTP::Server.new do |context|
                   
                 case 'seats_update':
                   screening.seats = data.seats;
+                  selectedSeats = new Set(
+                    Array.from(selectedSeats).filter(seatId => {
+                      const seat = screening.seats.find(s => s.id === seatId);
+                      return seat && (
+                        seat.status === "available" || 
+                        (seat.status === "pending" && seat.pending_user_id === userId) ||
+                        (seat.status === "reserved" && seat.user_id === userId)
+                      );
+                    })
+                  );
                   updateSeats();
                   updateReservations();
                   break;
                   
                 case 'error':
-                  console.error(data.message);
+                  showError(data.message);
+                  // Actualizar la UI para reflejar el estado actual
+                  updateSeats();
                   break;
               }
             }
@@ -404,4 +634,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

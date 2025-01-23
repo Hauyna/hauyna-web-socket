@@ -12,6 +12,7 @@ class Poll
   property status : String # active, closed
   property created_at : Time
   property end_time : Time?
+  property percentages : Hash(String, Float64)
   
   def initialize(@title : String, options : Array(String))
     @options = options.to_h { |opt| {opt, 0} }
@@ -19,6 +20,8 @@ class Poll
     @status = "active"
     @created_at = Time.local
     @end_time = nil
+    @percentages = {} of String => Float64
+    update_percentages
   end
   
   def vote(user_id : String, option : String) : Bool
@@ -31,7 +34,17 @@ class Poll
     
     @options[option] += 1
     @voters[user_id] = option
+    
+    update_percentages
+    
     true
+  end
+  
+  private def update_percentages
+    total = total_votes
+    @percentages = @options.transform_values { |votes|
+      total > 0 ? (votes * 100.0 / total) : 0.0
+    }
   end
   
   def close
@@ -47,6 +60,19 @@ class Poll
     total = total_votes
     return 0.0 if total == 0
     (@options[option] * 100.0) / total
+  end
+  
+  def to_json(json : JSON::Builder)
+    json.object do
+      json.field "title", @title
+      json.field "options", @options
+      json.field "voters", @voters
+      json.field "status", @status
+      json.field "created_at", @created_at
+      json.field "end_time", @end_time
+      json.field "total_votes", total_votes
+      json.field "percentages", @percentages
+    end
   end
 end
 
@@ -141,13 +167,23 @@ server = HTTP::Server.new do |context|
               border-radius: 4px;
               cursor: pointer;
               text-align: center;
+              transition: all 0.3s ease;
+              background: white;
             }
             .option:hover {
               background: #f5f5f5;
+              transform: translateY(-2px);
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             .option.selected {
               background: #e3f2fd;
               border-color: #2196F3;
+              box-shadow: 0 2px 4px rgba(33,150,243,0.2);
+            }
+            .option strong {
+              display: block;
+              margin-top: 5px;
+              color: #666;
             }
             .stats {
               display: flex;
@@ -196,22 +232,81 @@ server = HTTP::Server.new do |context|
                       '#FFCE56',
                       '#4BC0C0',
                       '#9966FF'
-                    ]
+                    ],
+                    yAxisID: 'y'
+                  }, {
+                    label: 'Porcentaje',
+                    data: Object.keys(poll.options).map(option => poll.percentages[option]),
+                    type: 'line',
+                    borderColor: '#4CAF50',
+                    borderWidth: 2,
+                    fill: false,
+                    yAxisID: 'y1'
                   }]
                 },
                 options: {
                   responsive: true,
                   maintainAspectRatio: false,
+                  interaction: {
+                    mode: 'index',
+                    intersect: false,
+                  },
                   scales: {
                     y: {
+                      type: 'linear',
+                      display: true,
+                      position: 'left',
                       beginAtZero: true,
                       ticks: {
                         stepSize: 1
+                      },
+                      title: {
+                        display: true,
+                        text: 'Número de votos'
+                      }
+                    },
+                    y1: {
+                      type: 'linear',
+                      display: true,
+                      position: 'right',
+                      beginAtZero: true,
+                      max: 100,
+                      ticks: {
+                        callback: function(value) {
+                          return value + '%';
+                        }
+                      },
+                      title: {
+                        display: true,
+                        text: 'Porcentaje'
+                      },
+                      grid: {
+                        drawOnChartArea: false
+                      }
+                    }
+                  },
+                  plugins: {
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          const value = context.raw;
+                          if (context.dataset.label === 'Votos') {
+                            const total = Object.values(poll.options).reduce((a, b) => a + b, 0);
+                            const percentage = calculatePercentage(value, total);
+                            return `${value} votos (${percentage.toFixed(1)}%)`;
+                          } else {
+                            return `${value.toFixed(1)}%`;
+                          }
+                        }
                       }
                     }
                   }
                 }
               });
+            }
+
+            function calculatePercentage(votes, total) {
+              return total > 0 ? (votes * 100 / total) : 0;
             }
 
             function updateUI(poll, yourVote = null) {
@@ -223,20 +318,23 @@ server = HTTP::Server.new do |context|
               const options = document.getElementById('options');
               options.innerHTML = Object.entries(poll.options)
                 .map(([option, votes]) => {
-                  const percentage = poll.total_votes > 0 ? 
-                    (votes * 100 / poll.total_votes).toFixed(1) : 0;
+                  const percentage = poll.percentages[option];
                   return \`
                     <div class="option \${option === yourVote ? 'selected' : ''}"
                          onclick="vote('\${option}')"
                          \${poll.status === 'closed' ? 'style="pointer-events: none"' : ''}>
                       \${option}<br>
-                      <strong>\${votes} votos (\${percentage}%)</strong>
+                      <strong>\${votes} votos (\${percentage.toFixed(1)}%)</strong>
                     </div>
                   \`;
                 }).join('');
               
               if (chart) {
+                chart.data.labels = Object.keys(poll.options);
                 chart.data.datasets[0].data = Object.values(poll.options);
+                chart.data.datasets[1].data = Object.keys(poll.options).map(option => 
+                  poll.percentages[option]
+                );
                 chart.update();
               } else {
                 chart = createChart(poll);

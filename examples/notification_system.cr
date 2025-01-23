@@ -7,18 +7,23 @@ server = HTTP::Server.new do |context|
   router = Hauyna::WebSocket::Router.new
 
   handler = Hauyna::WebSocket::Handler.new(
-    extract_identifier: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
+    extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
       params["user_id"]?.try(&.as_s)
     },
 
-    on_open: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
+    on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
       if user_id = params["user_id"]?.try(&.as_s)
         # Añadir usuario a su grupo personal para notificaciones dirigidas
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "user_#{user_id}")
         # Añadir usuario al grupo de notificaciones generales
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "general_notifications")
-        # Enviar notificación de conexión exitosa
-        socket.send("Conectado con ID: #{user_id}")
+        
+        socket.send(JSON.build { |json|
+          json.object do
+            json.field "type", "connected"
+            json.field "user_id", user_id
+          end
+        })
       end
     }
   )

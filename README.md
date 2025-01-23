@@ -19,6 +19,7 @@ Hauyna WebSocket es una biblioteca Crystal diseñada para simplificar la impleme
 - [Contribución](#contribución)
 - [Contribuidores](#contribuidores)
 - [Licencia](#licencia)
+- [Características Destacadas](#características-destacadas)
 
 
 ## Características Principales
@@ -53,6 +54,98 @@ Hauyna WebSocket es una biblioteca Crystal diseñada para simplificar la impleme
 - Limpieza automática de conexiones muertas
 - Validación de mensajes y conexiones
 
+### Sistema de Heartbeat y Auto-Reconexión
+
+Hauyna WebSocket incluye un sistema robusto de heartbeat y auto-reconexión para mantener las conexiones estables:
+
+#### Heartbeat del Servidor
+
+```crystal
+# Configurar handler con heartbeat
+handler = Hauyna::WebSocket::Handler.new(
+  heartbeat_interval: 30.seconds,  # Intervalo entre pings
+  heartbeat_timeout: 60.seconds,   # Tiempo máximo sin respuesta
+  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+    puts "Nueva conexión establecida"
+  }
+)
+
+# El heartbeat se maneja automáticamente:
+# - Envía pings periódicos
+# - Monitorea pongs
+# - Cierra conexiones inactivas
+# - Limpia recursos automáticamente
+```
+
+#### Cliente con Auto-Reconexión
+
+```javascript
+class WebSocketClient {
+  constructor(url, options = {}) {
+    this.url = url;
+    this.options = {
+      reconnectInterval: 1000,      // Intervalo entre intentos
+      maxReconnectAttempts: 5,      // Máximo de intentos
+      heartbeatInterval: 30000,     // Intervalo de heartbeat
+      ...options
+    };
+    
+    this.connect();
+  }
+
+  connect() {
+    this.ws = new WebSocket(this.url);
+    this.setupHeartbeat();
+    this.setupReconnection();
+  }
+
+  setupHeartbeat() {
+    // Enviar heartbeat periódicamente
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'heartbeat' }));
+      }
+    }, this.options.heartbeatInterval);
+  }
+
+  setupReconnection() {
+    this.ws.onclose = () => {
+      if (this.reconnectAttempts < this.options.maxReconnectAttempts) {
+        setTimeout(() => this.connect(), this.options.reconnectInterval);
+        this.reconnectAttempts++;
+      }
+    };
+  }
+}
+
+// Uso del cliente
+const ws = new WebSocketClient('ws://localhost:3000/chat', {
+  reconnectInterval: 2000,
+  maxReconnectAttempts: 3,
+  heartbeatInterval: 25000
+});
+```
+
+#### Características del Sistema
+
+- **Heartbeat del Servidor**:
+  - 🔄 Monitoreo automático de conexiones activas
+  - ⏱️ Intervalos configurables de ping/pong
+  - 🚫 Cierre automático de conexiones muertas
+  - 🧹 Limpieza automática de recursos
+
+- **Auto-Reconexión del Cliente**:
+  - 🔁 Reconexión automática en desconexiones
+  - ⚙️ Intentos de reconexión configurables
+  - ⏰ Intervalos de espera personalizables
+  - 📊 Eventos para monitorear el estado
+
+- **Beneficios**:
+  - 💪 Conexiones más estables y robustas
+  - 🛡️ Recuperación automática de fallos
+  - 📉 Reducción de conexiones fantasma
+  - 🔍 Mejor monitoreo del estado de conexión
+
 ## Casos de Uso
 
 La biblioteca es ideal para implementar:
@@ -68,20 +161,12 @@ La biblioteca es ideal para implementar:
 
 ## Instalación
 
-### Prerequisitos
-
-- Crystal 1.0 o superior
-- Git (opcional)
-
-### Desde Crystal Shards
-
 1. Agrega la dependencia a tu `shard.yml`:
 
 ```yaml
 dependencies:
   hauyna-web-socket:
-    github: Stockers-JAPG/hauyna-web-socket
-    version: ~> 0.1.0
+    github: tu-usuario/hauyna-web-socket
 ```
 
 2. Instala las dependencias:
@@ -90,52 +175,61 @@ dependencies:
 shards install
 ```
 
-### Desde el Código Fuente
+3. Importa la librería:
 
-1. Clona el repositorio:
-
-```bash
-git clone https://github.com/Stockers-JAPG/hauyna-web-socket.git
-```
-
-2. Entra al directorio:
-
-```bash
-cd hauyna-web-socket
-```
-
-3. Compila e instala:
-
-```bash
-shards build
+```crystal
+require "hauyna-web-socket"
 ```
 
 ## Uso Básico
 
 ```crystal
-require "http"
 require "hauyna-web-socket"
 
 # Crear un manejador WebSocket
 handler = Hauyna::WebSocket::Handler.new(
-  on_open: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
-    puts "Nueva conexión establecida"
-  },
-  
-  on_message: ->(socket : HTTP::WebSocket, message : String) {
-    puts "Mensaje recibido: #{message}"
+  # Identificar usuarios únicos
+  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+    params["user_id"]?.try(&.as_s)
   },
 
-  on_close: ->(socket : HTTP::WebSocket) {
-    puts "Conexión cerrada"
+  # Manejar conexión nueva
+  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+    user_id = params["user_id"]?.try(&.as_s)
+    room = params["room"]?.try(&.as_s) || "general"
+    
+    # Agregar usuario a un grupo
+    Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, room) if user_id
+    
+    # Notificar a todos en el grupo
+    Hauyna::WebSocket::Events.send_to_group(room, {
+      type: "user_joined",
+      user: user_id
+    }.to_json)
+  },
+
+  # Manejar mensajes
+  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
+    case data["type"]?.try(&.as_s)
+    when "broadcast"
+      Hauyna::WebSocket::Events.broadcast(data["message"].to_json)
+    when "private"
+      if recipient = data["to"]?.try(&.as_s)
+        Hauyna::WebSocket::Events.send_to_one(recipient, data["message"].to_json)
+      end
+    when "group"
+      if group = data["room"]?.try(&.as_s)
+        Hauyna::WebSocket::Events.send_to_group(group, data["message"].to_json)
+      end
+    end
   }
 )
 
-# Configurar el router
+# Configurar rutas
 router = Hauyna::WebSocket::Router.new
 router.websocket("/chat", handler)
 
-# Iniciar el servidor
+# Iniciar servidor
 server = HTTP::Server.new do |context|
   router.call(context)
 end
@@ -143,28 +237,37 @@ end
 server.listen("0.0.0.0", 3000)
 ```
 
-### Manejo de Eventos Personalizados
+### Cliente JavaScript
 
-```crystal
-# Registrar un evento
-Hauyna::WebSocket::Events.on("user_joined") do |socket, data|
-  puts "Nuevo usuario unido: #{data["username"]}"
-end
+```javascript
+// Conectar con parámetros
+const ws = new WebSocket('ws://localhost:3000/chat?user_id=123&room=general');
 
-# Disparar un evento
-Hauyna::WebSocket::Events.trigger_event("user_joined", socket, {"username" => "juan"})
-```
+// Enviar mensaje broadcast
+ws.send(JSON.stringify({
+  type: 'broadcast',
+  message: 'Hola a todos!'
+}));
 
-### Definir Rutas Dinámicas
+// Enviar mensaje privado
+ws.send(JSON.stringify({
+  type: 'private',
+  to: 'user456',
+  message: 'Hola usuario específico!'
+}));
 
-```crystal
-# Ruta con parámetros dinámicos
-router.websocket("/user/:id", handler)
+// Enviar mensaje a grupo
+ws.send(JSON.stringify({
+  type: 'group',
+  room: 'general',
+  message: 'Hola grupo!'
+}));
 
-# Acceder a los parámetros
-route = router.websocket_routes.first
-params = route.params("/user/123")
-puts "ID de usuario: #{params["id"]}"
+// Recibir mensajes
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Mensaje recibido:', data);
+};
 ```
 
 ## API
@@ -172,11 +275,12 @@ puts "ID de usuario: #{params["id"]}"
 ### `Hauyna::WebSocket::Handler`
 
 - **Propiedades**:
-  - `on_open_callback` : Callback para el evento de apertura de conexión
-  - `on_message_callback` : Callback para recibir mensajes
-  - `on_close_callback` : Callback para el evento de cierre de conexión
-  - `on_ping_callback` : Callback para manejar mensajes ping
-  - `on_pong_callback` : Callback para manejar mensajes pong
+  - `on_open` : Proc(HTTP::WebSocket, JSON::Any, Nil)
+  - `on_message` : Proc(HTTP::WebSocket, JSON::Any, Nil)
+  - `on_close` : Proc(HTTP::WebSocket, Nil)
+  - `on_ping` : Proc(HTTP::WebSocket, String, Nil)
+  - `on_pong` : Proc(HTTP::WebSocket, String, Nil)
+  - `extract_identifier` : Proc(HTTP::WebSocket, JSON::Any, String?)
 
 ### `Hauyna::WebSocket::Router`
 
@@ -202,11 +306,12 @@ puts "ID de usuario: #{params["id"]}"
 ## Contribución
 
 1. Fork el repositorio
-2. Crea tu rama de características (`git checkout -b mi-nueva-caracteristica`)
-3. Commit tus cambios (`git commit -am 'Agrega alguna característica'`)
-4. Push a la rama (`git push origin mi-nueva-caracteristica`)
-5. Crea un nuevo Pull Request
+2. Crea una rama para tu feature (`git checkout -b feature/amazing-feature`)
+3. Commit tus cambios (`git commit -am 'Add some amazing feature'`)
+4. Push a la rama (`git push origin feature/amazing-feature`)
+5. Crea un Pull Request
 
+¿Encontraste un bug? ¿Tienes una idea? ¡Abre un issue!
 
 ## Contribuidores
 
@@ -241,3 +346,18 @@ Siéntete libre de usarla en proyectos personales o comerciales.
 
 **¡Disfruta desarrollando aplicaciones WebSocket potentes y rápidas con Hauyna!**  
 Si encuentras problemas o sugerencias, crea un _issue_ en el repositorio oficial.
+
+## Características Destacadas
+
+- 🚀 **API Simple y Flexible**: Diseñada para ser intuitiva y fácil de usar
+- 👥 **Gestión de Grupos**: Agrupa usuarios y envía mensajes a grupos específicos
+- 🔒 **Identificación de Usuarios**: Sistema integrado para identificar conexiones
+- 📨 **Patrones de Mensajería**: Broadcast, mensajes privados y grupales
+- 🎯 **Enrutamiento Simple**: Define rutas WebSocket fácilmente
+- 🛡️ **Manejo de Errores**: Sistema robusto de manejo de errores y reconexión
+- 📊 **Ejemplos Completos**: Múltiples ejemplos de implementación
+- 🔄 **Eventos en Tiempo Real**: Sistema de eventos para actualizaciones instantáneas
+
+[![GitHub release](https://img.shields.io/github/release/tu-usuario/hauyna-web-socket.svg)](https://github.com/tu-usuario/hauyna-web-socket/releases)
+[![Build Status](https://github.com/tu-usuario/hauyna-web-socket/workflows/CI/badge.svg)](https://github.com/tu-usuario/hauyna-web-socket/actions)
+[![License](https://img.shields.io/github/license/tu-usuario/hauyna-web-socket.svg)](https://github.com/tu-usuario/hauyna-web-socket/blob/master/LICENSE)

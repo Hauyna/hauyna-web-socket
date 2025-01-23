@@ -18,17 +18,14 @@ module Hauyna
         response = context.response
 
         if handler = match_route(request.path)
-          # Verificar si es una solicitud de WebSocket
+          
           if upgrade_websocket?(request)
-            # Extraer parámetros de la query
             params = extract_params(request)
             
-            # Crear un WebSocketHandler para manejar el handshake
             ws_handler = HTTP::WebSocketHandler.new do |ws, ctx|
               handler.call(ws, params)
             end
 
-            # Procesar la solicitud WebSocket
             ws_handler.call(context)
             return true
           end
@@ -56,7 +53,12 @@ module Hauyna
           query.split('&').each do |param|
             if param.includes?('=')
               key, value = param.split('=', 2)
-              params[URI.decode_www_form(key)] = JSON::Any.new(URI.decode_www_form(value))
+              begin
+                parsed_value = JSON.parse(URI.decode_www_form(value))
+                params[URI.decode_www_form(key)] = parsed_value
+              rescue JSON::ParseException
+                params[URI.decode_www_form(key)] = JSON::Any.new(URI.decode_www_form(value))
+              end
             end
           end
         end

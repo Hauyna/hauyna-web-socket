@@ -63,16 +63,16 @@ class Board
       old_status = task.status
       old_assigned = task.assigned_to
       
-      task.status = status
+      task.status = status.presence || "todo"
       task.assigned_to = assigned_to
       task.updated_at = Time.local
       
-      if old_status != status
-        log_activity("Tarea '#{task.title}' movida a #{status}")
+      if old_status != task.status
+        log_activity("Tarea '#{task.title}' movida a #{task.status}")
       end
       
-      if old_assigned != assigned_to && assigned_to
-        log_activity("Tarea '#{task.title}' asignada a #{@users[assigned_to]}")
+      if old_assigned != assigned_to && assigned_to && (user_name = @users[assigned_to]?)
+        log_activity("Tarea '#{task.title}' asignada a #{user_name}")
       end
     end
   end
@@ -101,45 +101,47 @@ server = HTTP::Server.new do |context|
   }
 
   handler.on_open = ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
-    if user_id = params["user_id"]?.try(&.as_s)
-      if name = params["name"]?.try(&.as_s)
-        board.users[user_id] = name
-        Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-        
-        socket.send({
-          type: "init",
-          board: board
-        }.to_json)
-      end
+    if (user_id = params["user_id"]?.try(&.as_s)) && (name = params["name"]?.try(&.as_s))
+      board.users[user_id] = name
+      Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
+      
+      socket.send({
+        type: "init",
+        board: board
+      }.to_json)
     end
   }
 
   handler.on_message = ->(socket : HTTP::WebSocket, message : String) {
     if user_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
       begin
-        data = JSON.parse(message)
+        data = JSON.parse(message).as_h
         case data["type"]?.try(&.as_s)
         when "create_task"
           task = Task.new(
-            title: data["title"].as_s,
-            description: data["description"].as_s,
+            title: data["title"]?.try(&.as_s) || "",
+            description: data["description"]?.try(&.as_s) || "",
             created_by: user_id
           )
           board.add_task(task)
           
         when "update_task"
-          board.update_task(
-            task_id: data["task_id"].as_s,
-            status: data["status"].as_s,
-            assigned_to: data["assigned_to"]?.try(&.as_s)
-          )
+          if (task_id = data["task_id"]?.try(&.as_s)) && (status = data["status"]?.try(&.as_s))
+            board.update_task(
+              task_id: task_id,
+              status: status,
+              assigned_to: data["assigned_to"]?.try(&.as_s)
+            )
+          end
           
         when "add_comment"
-          comment = Comment.new(
-            text: data["text"].as_s,
-            user_id: user_id
-          )
-          board.add_comment(data["task_id"].as_s, comment)
+          if (task_id = data["task_id"]?.try(&.as_s)) && (text = data["text"]?.try(&.as_s))
+            comment = Comment.new(
+              text: text,
+              user_id: user_id
+            )
+            board.add_comment(task_id, comment)
+          end
         end
         
         Hauyna::WebSocket::Events.send_to_group("users", {
@@ -331,12 +333,19 @@ server = HTTP::Server.new do |context|
             }
             
             function updateTask(taskId, status, assignedTo = null) {
-              ws.send(JSON.stringify({
+              if (!taskId || !status || !ws) return;
+              
+              const data = {
                 type: 'update_task',
                 task_id: taskId,
-                status: status,
-                assigned_to: assignedTo
-              }));
+                status: status
+              };
+              
+              if (assignedTo) {
+                data.assigned_to = assignedTo;
+              }
+              
+              ws.send(JSON.stringify(data));
             }
             
             function addComment(taskId) {
@@ -362,9 +371,15 @@ server = HTTP::Server.new do |context|
             function drop(event) {
               event.preventDefault();
               const taskId = event.dataTransfer.getData('task_id');
-              const newStatus = event.currentTarget.dataset.status;
+              if (!taskId || !event.currentTarget) return;
               
-              document.querySelector('.dragging')?.classList.remove('dragging');
+              const newStatus = event.currentTarget.dataset.status;
+              if (!newStatus) return;
+              
+              const draggingElement = document.querySelector('.dragging');
+              if (draggingElement) {
+                draggingElement.classList.remove('dragging');
+              }
               
               updateTask(taskId, newStatus);
             }

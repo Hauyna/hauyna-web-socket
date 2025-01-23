@@ -13,7 +13,6 @@ module Hauyna
         @segments = path.chomp("/").split("/")
       end
 
-      # Verifica si la ruta coincide con la solicitud
       def match?(request_path : String) : Bool
         req_segments = request_path.chomp("/").split("?").first.split("/")
 
@@ -24,7 +23,6 @@ module Hauyna
         end
       end
 
-      # Extrae parámetros de la ruta (si hay segmentos dinámicos)
       def params(request_path : String) : Hash(String, String)
         params = {} of String => String
         req_segments = request_path.chomp("/").split("?").first.split("/")

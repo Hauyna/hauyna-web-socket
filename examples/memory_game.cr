@@ -130,57 +130,53 @@ game = Game.new
 
 server = HTTP::Server.new do |context|
   router = Hauyna::WebSocket::Router.new
-  handler = Hauyna::WebSocket::Handler.new
+  handler = Hauyna::WebSocket::Handler.new(
+    extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+      params["player_id"]?.try(&.as_s)
+    },
 
-  handler.extract_identifier = ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
-    params["player_id"]?.try(&.as_s)
-  }
-
-  handler.on_open = ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
-    if player_id = params["player_id"]?.try(&.as_s)
-      if name = params["name"]?.try(&.as_s)
+    on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+      if player_id = params["player_id"]?.try(&.as_s)
+        name = params["name"]?.try(&.as_s) || "Jugador #{player_id}"
         game.add_player(player_id, name)
-        Hauyna::WebSocket::ConnectionManager.add_to_group(player_id, "players")
         
-        Hauyna::WebSocket::Events.send_to_group("players", {
-          type: "game_update",
-          game: game
-        }.to_json)
+        socket.send(JSON.build { |json|
+          json.object do
+            json.field "type", "game_update"
+            json.field "game", game
+          end
+        })
       end
-    end
-  }
+    },
 
-  handler.on_message = ->(socket : HTTP::WebSocket, message : String) {
-    if player_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
-      begin
-        data = JSON.parse(message)
-        if data["type"]?.try(&.as_s) == "reveal"
-          if card_id = data["card_id"]?.try(&.as_i)
-            if game.reveal_card(card_id)
-              Hauyna::WebSocket::Events.send_to_group("players", {
-                type: "game_update",
-                game: game
-              }.to_json)
-              
-              if game.revealed_cards.size == 2
-                sleep 1.seconds
-                game.hide_revealed
-                Hauyna::WebSocket::Events.send_to_group("players", {
-                  type: "game_update",
-                  game: game
-                }.to_json)
+    on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
+      if player_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
+        if data["type"]?.try(&.as_s) == "reveal" && 
+           (card_id = data["card_id"]?.try(&.as_i))
+          
+          if game.reveal_card(card_id)
+            socket.send(JSON.build { |json|
+              json.object do
+                json.field "type", "game_update"
+                json.field "game", game
               end
+            })
+            
+            if game.revealed_cards.size == 2
+              sleep 1.seconds
+              game.hide_revealed
+              socket.send(JSON.build { |json|
+                json.object do
+                  json.field "type", "game_update"
+                  json.field "game", game
+                end
+              })
             end
           end
         end
-      rescue ex
-        socket.send({
-          type: "error",
-          message: ex.message
-        }.to_json)
       end
-    end
-  }
+    }
+  )
 
   router.websocket("/memory", handler)
   

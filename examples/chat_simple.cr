@@ -9,20 +9,20 @@ server = HTTP::Server.new do |context|
   # Crear un manejador para el WebSocket
   handler = Hauyna::WebSocket::Handler.new(
     # Extraer el identificador del usuario de los parámetros
-    extract_identifier: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
+    extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
       params["username"]?.try(&.as_s)
     },
 
     # Manejar cuando un usuario se conecta
-    on_open: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
+    on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
       username = params["username"]?.try(&.as_s) || "Anónimo"
       Hauyna::WebSocket::Events.broadcast("#{username} se ha conectado")
     },
 
     # Manejar los mensajes recibidos
-    on_message: ->(socket : HTTP::WebSocket, message : String) {
+    on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
       if identifier = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
-        Hauyna::WebSocket::Events.broadcast("#{identifier}: #{message}")
+        Hauyna::WebSocket::Events.broadcast("#{identifier}: #{data.as_s}")
       end
     },
 

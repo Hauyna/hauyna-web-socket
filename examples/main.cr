@@ -2,18 +2,18 @@ require "json"
 require "uri"
 require "http"
 
-require "./src/hauyna-web-socket"
+require "../src/hauyna-web-socket"
 
 # Definición del Handler con manejo de parámetros y patrones de mensajería
 chat_handler = Hauyna::WebSocket::Handler.new(
-  on_open: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
+  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
     puts "Conexión abierta con parámetros: #{params}"
     # Implementa lógica adicional de autenticación o inicialización aquí si es necesario
   },
-  on_message: ->(socket : HTTP::WebSocket, message : String) {
-    puts "Mensaje recibido: #{message}"
+  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
+    puts "Mensaje recibido: #{data}"
+    
     begin
-      data = JSON.parse(message)
       action = data["event"]?.try(&.as_s)
       
       case action
@@ -40,9 +40,19 @@ chat_handler = Hauyna::WebSocket::Handler.new(
           identifier = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
           if identifier
             Hauyna::WebSocket::ConnectionManager.add_to_group(identifier, group_name)
-            socket.send({ event: "group_joined", data: "Te has unido al grupo #{group_name}." }.to_json)
+            socket.send(JSON.build { |json|
+              json.object do
+                json.field "event", "group_joined"
+                json.field "data", "Te has unido al grupo #{group_name}."
+              end
+            })
           else
-            socket.send({ event: "error", data: "No se pudo identificar tu conexión." }.to_json)
+            socket.send(JSON.build { |json|
+              json.object do
+                json.field "event", "error"
+                json.field "data", "No se pudo identificar tu conexión."
+              end
+            })
           end
         end
       when "leave_group"
@@ -51,9 +61,19 @@ chat_handler = Hauyna::WebSocket::Handler.new(
           identifier = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
           if identifier
             Hauyna::WebSocket::ConnectionManager.remove_from_group(identifier, group_name)
-            socket.send({ event: "group_left", data: "Has salido del grupo #{group_name}." }.to_json)
+            socket.send(JSON.build { |json|
+              json.object do
+                json.field "event", "group_left"
+                json.field "data", "Has salido del grupo #{group_name}."
+              end
+            })
           else
-            socket.send({ event: "error", data: "No se pudo identificar tu conexión." }.to_json)
+            socket.send(JSON.build { |json|
+              json.object do
+                json.field "event", "error"
+                json.field "data", "No se pudo identificar tu conexión."
+              end
+            })
           end
         end
       when "send_to_group"
@@ -63,64 +83,63 @@ chat_handler = Hauyna::WebSocket::Handler.new(
           Hauyna::WebSocket::Events.send_to_group(group_name, content)
         end
       else
-        socket.send({ event: "error", data: "Acción desconocida o parámetros inválidos." }.to_json)
+        socket.send(JSON.build { |json|
+          json.object do
+            json.field "event", "error"
+            json.field "data", "Acción desconocida o parámetros inválidos."
+          end
+        })
       end
-    rescue e: JSON::ParseException
-      socket.send({ event: "error", data: "Formato JSON inválido." }.to_json)
     rescue e : Exception
-      socket.send({ event: "error", data: "Error al procesar el mensaje: #{e.message}" }.to_json)
+      socket.send(JSON.build { |json|
+        json.object do
+          json.field "event", "error"
+          json.field "data", "Error al procesar el mensaje: #{e.message}"
+        end
+      })
     end
   },
   on_close: ->(socket : HTTP::WebSocket) {
     puts "Conexión cerrada"
     # Implementa lógica de limpieza o notificación aquí si es necesario
   },
-  # on_error: ->(socket: HTTP::WebSocket, error: Exception) {
-  #   puts "Error: #{error.message}"
-  #   # Implementa lógica de manejo de errores aquí si es necesario
-  # },
-  extract_identifier: ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) : String? {
+  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) : String? {
     # Devolvemos el identificador como String?
     params["client_id"]?.try(&.as_s) || params["session_id"]?.try(&.as_s)
   }
 )
 
-# Método auxiliar para obtener el identifier asociado a un socket (opcional si ya se usa ConnectionManager)
-def get_identifier(socket : HTTP::WebSocket) : String?
-  Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
-end
-
 # Configuración del Router
 router = Hauyna::WebSocket::Router.new
 router.websocket("/chat", chat_handler)
 
-# Registro de Eventos para Broadcasting y Envío de Mensajes Dirigidos
+# Registro de Eventos
 Hauyna::WebSocket::Events.on("broadcast") do |socket, data|
-  if content = data["content"]?.try(&.as_s?)
+  if content = data["content"]?.try(&.as_s)
     Hauyna::WebSocket::ConnectionManager.broadcast(content)
   end
 end
 
 Hauyna::WebSocket::Events.on("send_to_one") do |socket, data|
-  identifier = data["recipient_id"]?.try(&.as_s?)
-  content = data["content"]?.try(&.as_s?)
+  identifier = data["recipient_id"]?.try(&.as_s)
+  content = data["content"]?.try(&.as_s)
   if identifier && content
     Hauyna::WebSocket::ConnectionManager.send_to_one(identifier, content)
   end
 end
 
 Hauyna::WebSocket::Events.on("send_to_many") do |socket, data|
-  if recipient_ids = data["recipient_ids"]?.try(&.as_a?)
-    identifiers = recipient_ids.compact_map(&.as_s?)
-    if content = data["content"]?.try(&.as_s?)
+  if recipient_ids = data["recipient_ids"]?.try(&.as_a)
+    identifiers = recipient_ids.compact_map(&.as_s)
+    if content = data["content"]?.try(&.as_s)
       Hauyna::WebSocket::ConnectionManager.send_to_many(identifiers, content)
     end
   end
 end
 
 Hauyna::WebSocket::Events.on("send_to_group") do |socket, data|
-  group_name = data["group"]?.try(&.as_s?)
-  content = data["content"]?.try(&.as_s?)
+  group_name = data["group"]?.try(&.as_s)
+  content = data["content"]?.try(&.as_s)
   if group_name && content
     Hauyna::WebSocket::ConnectionManager.send_to_group(group_name, content)
   end

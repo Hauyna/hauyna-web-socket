@@ -9,17 +9,50 @@ class Document
   property content : String
   property version : Int32
   property last_editor : String?
+  property cursors : Hash(String, Int32) # Posición del cursor por editor
 
   def initialize
     @content = ""
     @version = 0
     @last_editor = nil
+    @cursors = {} of String => Int32
   end
 
-  def update(new_content : String, editor : String)
-    @content = new_content
+  def update(operation : Operation, editor : String)
+    apply_operation(operation)
     @version += 1
     @last_editor = editor
+  end
+
+  def update_cursor(editor : String, position : Int32)
+    @cursors[editor] = position
+  end
+
+  private def apply_operation(operation : Operation)
+    case operation.type
+    when "insert"
+      before = @content[0...operation.position]
+      after = @content[operation.position..]
+      @content = before + operation.text + after
+    when "delete"
+      before = @content[0...operation.position]
+      after = @content[operation.position + operation.length]
+      @content = before + after
+    end
+  end
+end
+
+class Operation
+  include JSON::Serializable
+  
+  property type : String # "insert" o "delete"
+  property position : Int32
+  property text : String
+  property length : Int32
+  property editor : String
+  property version : Int32
+
+  def initialize(@type, @position, @text, @length, @editor, @version)
   end
 end
 
@@ -47,12 +80,33 @@ server = HTTP::Server.new do |context|
     if editor_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
       begin
         data = JSON.parse(message)
-        if data["type"]?.try(&.as_s) == "update"
-          if content = data["content"]?.try(&.as_s)
-            document.update(content, editor_id)
+        case data["type"]?.try(&.as_s)
+        when "update"
+          if operation_data = data["operation"]?
+            operation = Operation.new(
+              type: operation_data["type"].as_s,
+              position: operation_data["position"].as_i,
+              text: operation_data["text"].as_s,
+              length: operation_data["length"].as_i,
+              editor: editor_id,
+              version: operation_data["version"].as_i
+            )
+            
+            document.update(operation, editor_id)
+            
             Hauyna::WebSocket::Events.send_to_group("editors", {
-              type: "document_update",
-              document: document
+              type: "operation",
+              operation: operation
+            }.to_json)
+          end
+        when "cursor"
+          if position = data["position"]?.try(&.as_i)
+            document.update_cursor(editor_id, position)
+            
+            Hauyna::WebSocket::Events.send_to_group("editors", {
+              type: "cursor_update",
+              editor: editor_id,
+              position: position
             }.to_json)
           end
         end
@@ -126,37 +180,128 @@ server = HTTP::Server.new do |context|
             const error = document.getElementById('error');
             
             let isUpdating = false;
-            let updateTimeout;
+            let localVersion = 0;
+            let lastCursorPosition = 0;
 
             ws.onopen = () => {
               status.textContent = 'Conectado';
             };
 
-            editor.addEventListener('input', () => {
+            editor.addEventListener('input', (e) => {
               if (isUpdating) return;
               
-              clearTimeout(updateTimeout);
-              updateTimeout = setTimeout(() => {
-                ws.send(JSON.stringify({
-                  type: 'update',
-                  content: editor.value
-                }));
-              }, 500);
+              const position = editor.selectionStart;
+              const change = getInputChange(e);
+              
+              if (change) {
+                sendOperation(change);
+              }
+              
+              lastCursorPosition = position;
             });
+
+            editor.addEventListener('select', (e) => {
+              const position = editor.selectionStart;
+              if (position !== lastCursorPosition) {
+                ws.send(JSON.stringify({
+                  type: 'cursor',
+                  position: position,
+                  editor: editorId
+                }));
+                lastCursorPosition = position;
+              }
+            });
+
+            function getInputChange(e) {
+              const position = editor.selectionStart;
+              
+              if (e.inputType === 'insertText' || e.inputType === 'insertLineBreak') {
+                return {
+                  type: 'insert',
+                  position: position - 1,
+                  text: e.data || '\\n',
+                  length: 1,
+                  editor: editorId,
+                  version: localVersion
+                };
+              } else if (e.inputType === 'deleteContentBackward') {
+                return {
+                  type: 'delete',
+                  position: position,
+                  text: '',
+                  length: 1,
+                  editor: editorId,
+                  version: localVersion
+                };
+              }
+              return null;
+            }
+
+            function sendOperation(operation) {
+              ws.send(JSON.stringify({
+                type: 'update',
+                operation: operation
+              }));
+            }
+
+            function applyOperation(operation) {
+              isUpdating = true;
+              const currentPosition = editor.selectionStart;
+              
+              if (operation.type === 'insert') {
+                const before = editor.value.slice(0, operation.position);
+                const after = editor.value.slice(operation.position);
+                editor.value = before + operation.text + after;
+                
+                // Ajustar cursor si la inserción fue antes de nuestra posición
+                if (operation.position < currentPosition) {
+                  editor.selectionStart = editor.selectionEnd = currentPosition + operation.text.length;
+                }
+              } else if (operation.type === 'delete') {
+                const before = editor.value.slice(0, operation.position);
+                const after = editor.value.slice(operation.position + operation.length);
+                editor.value = before + after;
+                
+                // Ajustar cursor si la eliminación fue antes de nuestra posición
+                if (operation.position < currentPosition) {
+                  editor.selectionStart = editor.selectionEnd = currentPosition - operation.length;
+                }
+              }
+              
+              isUpdating = false;
+            }
 
             ws.onmessage = (event) => {
               const data = JSON.parse(event.data);
               
-              if (data.type === 'error') {
-                error.textContent = data.message;
-                setTimeout(() => error.textContent = '', 3000);
-              } else if (data.type === 'init' || data.type === 'document_update') {
-                isUpdating = true;
-                editor.value = data.document.content;
-                version.textContent = \`Versión: \${data.document.version}\`;
-                lastEditor.textContent = data.document.last_editor ? 
-                  \`Último editor: \${data.document.last_editor}\` : '';
-                isUpdating = false;
+              switch(data.type) {
+                case 'error':
+                  error.textContent = data.message;
+                  setTimeout(() => error.textContent = '', 3000);
+                  break;
+                  
+                case 'init':
+                  isUpdating = true;
+                  editor.value = data.document.content;
+                  localVersion = data.document.version;
+                  version.textContent = \`Versión: \${data.document.version}\`;
+                  lastEditor.textContent = data.document.last_editor ? 
+                    \`Último editor: \${data.document.last_editor}\` : '';
+                  isUpdating = false;
+                  break;
+                  
+                case 'operation':
+                  if (data.operation.editor !== editorId) {
+                    applyOperation(data.operation);
+                    localVersion++;
+                    version.textContent = \`Versión: \${localVersion}\`;
+                    lastEditor.textContent = \`Último editor: \${data.operation.editor}\`;
+                  }
+                  break;
+                  
+                case 'cursor_update':
+                  // Implementar visualización de cursores de otros usuarios si se desea
+                  break;
               }
             };
           </script>

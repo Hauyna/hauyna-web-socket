@@ -29,6 +29,12 @@ class Game
     @time_left = 60
   end
   
+  def clear_round
+    @current_word = ""
+    @state = "round_end"
+    @time_left = 0
+  end
+  
   def add_player(id : String)
     @players[id] = 0 unless @players[id]?
   end
@@ -39,6 +45,36 @@ class Game
 end
 
 game = Game.new
+
+# Un único temporizador global
+spawn do
+  loop do
+    start_time = Time.monotonic
+    
+    if game.state == "playing" && game.time_left > 0
+      game.time_left -= 1
+      
+      if game.time_left == 0
+        game.clear_round
+        Hauyna::WebSocket::Events.send_to_group("players", {
+          type: "time_up",
+          word: game.current_word,
+          game: game,
+          clear: true
+        }.to_json)
+      else
+        Hauyna::WebSocket::Events.send_to_group("players", {
+          type: "tick",
+          time: game.time_left
+        }.to_json)
+      end
+    end
+    
+    elapsed = Time.monotonic - start_time
+    sleep_time = 1.second - elapsed
+    sleep sleep_time if sleep_time > Time::Span.zero
+  end
+end
 
 server = HTTP::Server.new do |context|
   router = Hauyna::WebSocket::Router.new
@@ -112,34 +148,6 @@ server = HTTP::Server.new do |context|
       end
     end
   }
-
-  # Iniciar el temporizador del juego
-  spawn do
-    loop do
-      sleep 1.seconds
-      next unless game.state == "playing" && game.time_left > 0
-      
-      game.time_left -= 1
-      
-      if game.time_left == 0
-        game.state = "round_end"
-        Hauyna::WebSocket::Events.send_to_group("players", {
-          type: "time_up",
-          word: game.current_word,
-          game: game
-        }.to_json)
-      else
-        begin
-          Hauyna::WebSocket::Events.send_to_group("players", {
-            type: "tick",
-            time: game.time_left
-          }.to_json)
-        rescue ex
-          puts "Error al enviar tick: #{ex.message}"
-        end
-      end
-    end
-  end
 
   router.websocket("/pictionary", handler)
   
@@ -234,8 +242,19 @@ server = HTTP::Server.new do |context|
               [lastX, lastY] = [e.offsetX, e.offsetY];
             }
 
+            function clearCanvas() {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            let lastDrawTime = 0;
+            const DRAW_THROTTLE = 50; // Limitar envío de eventos de dibujo
+            
             function draw(e) {
               if (!isDrawing || !isDrawer) return;
+              
+              const now = Date.now();
+              if (now - lastDrawTime < DRAW_THROTTLE) return;
+              lastDrawTime = now;
               
               ctx.beginPath();
               ctx.moveTo(lastX, lastY);
@@ -276,6 +295,8 @@ server = HTTP::Server.new do |context|
                 \`).join('');
             }
 
+            let lastTick = Date.now();
+            
             ws.onmessage = (event) => {
               const data = JSON.parse(event.data);
               
@@ -287,6 +308,7 @@ server = HTTP::Server.new do |context|
                     \`Dibuja: \${data.game.current_word}\` : 
                     'Adivina la palabra';
                   updatePlayers(data.game);
+                  clearCanvas(); // Limpiar canvas al iniciar nueva ronda
                   break;
                   
                 case 'draw_update':
@@ -300,7 +322,7 @@ server = HTTP::Server.new do |context|
                   break;
                   
                 case 'correct_guess':
-                  ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  clearCanvas();
                   addMessage(\`¡\${data.winner} adivinó la palabra "\${data.word}"!\`);
                   updatePlayers(data.game);
                   setTimeout(() => {
@@ -309,6 +331,7 @@ server = HTTP::Server.new do |context|
                   break;
                   
                 case 'time_up':
+                  clearCanvas();
                   addMessage(\`¡Se acabó el tiempo! La palabra era "\${data.word}"\`);
                   updatePlayers(data.game);
                   setTimeout(() => {
@@ -317,7 +340,11 @@ server = HTTP::Server.new do |context|
                   break;
                   
                 case 'tick':
-                  document.getElementById('timer').textContent = \`Tiempo: \${data.time}s\`;
+                  const now = Date.now();
+                  if (now - lastTick >= 900) { // Asegurar que han pasado al menos 0.9 segundos
+                    document.getElementById('timer').textContent = \`Tiempo: \${data.time}s\`;
+                    lastTick = now;
+                  }
                   break;
               }
             };

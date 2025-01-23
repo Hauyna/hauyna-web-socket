@@ -1,8 +1,9 @@
 name: hauyna-web-socket
-version: 0.1.0
+version: 1.0.0
 
 authors:
   - Jose Antonio Padre Garcia <padre_japg@protonmail.com>
+  - Luis Antonio Padre García <luispadre@protonmail.com>
 
 crystal: '>= 1.14.0'
 

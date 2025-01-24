@@ -518,6 +518,200 @@ Presence.present_in?("user123", {
 Presence.get_state("user123") # => {"status" => "online", ...}
 ```
 
+## Manejo de Errores
+
+### Tipos de Errores
+
+Hauyna WebSocket maneja diferentes tipos de errores de forma robusta y consistente:
+
+#### 1. Errores de Validación
+```crystal
+# Ejemplo de error de validación
+ws.send(JSON.stringify({
+  type: "broadcast" 
+  // Error: Falta el campo message
+}))
+
+// Respuesta del servidor
+{
+  "type": "error",
+  "error_type": "validation_error", 
+  "message": "El mensaje debe tener contenido"
+}
+```
+
+#### 2. Errores de Parsing
+```crystal
+# Ejemplo de error de parsing
+ws.send("mensaje inválido")
+
+// Respuesta del servidor
+{
+  "type": "error",
+  "error_type": "parse_error",
+  "message": "Formato de mensaje inválido"
+}
+```
+
+#### 3. Errores de Conexión
+```crystal
+# Códigos de cierre de conexión
+1000 - Cierre normal
+1001 - Going Away (timeout)
+1002 - Protocol Error
+1003 - Unsupported Data
+```
+
+### Manejo de Errores en el Cliente
+
+```javascript
+ws.onerror = (error) => {
+  console.error('Error WebSocket:', error);
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  
+  if (data.type === 'error') {
+    switch(data.error_type) {
+      case 'validation_error':
+        handleValidationError(data.message);
+        break;
+      case 'parse_error':
+        handleParseError(data.message);
+        break;
+      case 'internal_error':
+        handleInternalError(data.message);
+        break;
+    }
+  }
+};
+```
+
+### Mejores Prácticas
+
+1. **Validación Preventiva**
+```javascript
+function sendMessage(message) {
+  // Validar antes de enviar
+  if (!message.type || !message.content) {
+    handleError('Mensaje incompleto');
+    return;
+  }
+  
+  ws.send(JSON.stringify(message));
+}
+```
+
+2. **Reintentos Inteligentes**
+```javascript
+let retryCount = 0;
+const MAX_RETRIES = 3;
+
+function reconnect() {
+  if (retryCount < MAX_RETRIES) {
+    setTimeout(() => {
+      connect();
+      retryCount++;
+    }, 1000 * Math.pow(2, retryCount));
+  }
+}
+```
+
+3. **Logging y Monitoreo**
+```javascript
+ws.onclose = (event) => {
+  console.log(`Conexión cerrada: ${event.code} - ${event.reason}`);
+  logConnectionEvent({
+    type: 'close',
+    code: event.code,
+    reason: event.reason,
+    timestamp: new Date()
+  });
+};
+```
+
+## Arquitectura
+
+### Diagrama General
+
+```mermaid
+graph TB
+    Client[Cliente WebSocket] -->|WebSocket| Server[Servidor Hauyna]
+    Server -->|Eventos| Handler[Handler]
+    Handler -->|Gestión| ConnectionManager[Connection Manager]
+    Handler -->|Validación| MessageValidator[Message Validator]
+    Handler -->|Canales| Channel[Channel System]
+    Handler -->|Presencia| Presence[Presence System]
+    
+    ConnectionManager -->|Grupos| Groups[(Grupos)]
+    Channel -->|Suscripciones| Subscriptions[(Suscripciones)]
+    Presence -->|Estado| PresenceState[(Estado Presencia)]
+```
+
+### Flujo de Mensajes
+
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant H as Handler
+    participant V as Validator
+    participant CM as ConnectionManager
+    participant CH as Channel
+    
+    C->>H: Mensaje WebSocket
+    H->>V: Validar Mensaje
+    alt Mensaje Válido
+        V-->>H: OK
+        H->>CM: Procesar Mensaje
+        alt Mensaje de Canal
+            H->>CH: Broadcast Canal
+            CH-->>C: Mensaje Canal
+        else Mensaje Directo
+            CM-->>C: Mensaje Directo
+        end
+    else Mensaje Inválido
+        V-->>H: Error
+        H-->>C: Error Response
+    end
+```
+
+### Arquitectura de Canales
+
+```mermaid
+graph LR
+    subgraph Canales
+    CH[Channel Manager] -->|Gestiona| S1[Suscripción 1]
+    CH -->|Gestiona| S2[Suscripción 2]
+    CH -->|Gestiona| S3[Suscripción N]
+    end
+    
+    subgraph Presencia
+    P[Presence System] -->|Monitorea| PS[Estado Presencia]
+    end
+    
+    subgraph Conexiones
+    CM[Connection Manager] -->|Administra| C1[Conexión 1]
+    CM -->|Administra| C2[Conexión 2]
+    CM -->|Administra| C3[Conexión N]
+    end
+    
+    CH <-->|Sincroniza| P
+    CM <-->|Notifica| CH
+```
+
+### Sistema de Presencia
+
+```mermaid
+stateDiagram-v2
+    [*] --> Online: Conexión
+    Online --> Away: Inactividad
+    Away --> Online: Actividad
+    Online --> Offline: Desconexión
+    Away --> Offline: Timeout
+    Offline --> Online: Reconexión
+```
+
 ## API
 
 ### `Hauyna::WebSocket::Handler`
@@ -654,3 +848,218 @@ Siéntete libre de usarla en proyectos personales o comerciales.
 
 **¡Disfruta desarrollando aplicaciones WebSocket potentes y rápidas con Hauyna!**  
 Si encuentras problemas o sugerencias, crea un _issue_ en el repositorio oficial.
+
+## Seguridad y Thread Safety
+
+### Mutex y Sincronización
+
+Hauyna implementa un sistema robusto de sincronización usando Mutex para garantizar operaciones thread-safe:
+
+```crystal
+# Ejemplo de operación thread-safe en ConnectionManager
+@@mutex.synchronize do
+  @@connections[identifier] = socket
+  @@socket_to_identifier[socket] = identifier
+end
+```
+
+### Mejores Prácticas de Seguridad
+
+1. **Validación de Mensajes**
+```crystal
+# Validar mensajes antes de procesarlos
+MessageValidator.validate_message(parsed_message)
+```
+
+2. **Limpieza de Recursos**
+```crystal
+# Limpieza automática al cerrar conexión
+Channel.cleanup_socket(socket)
+ConnectionManager.unregister(socket)
+```
+
+3. **Manejo de Timeouts**
+```crystal
+# Configuración de timeouts
+handler = Handler.new(
+  heartbeat_interval: 30.seconds,
+  heartbeat_timeout: 60.seconds
+)
+```
+
+## Monitoreo y Diagnóstico
+
+### Métricas Disponibles
+
+```crystal
+# Métricas de conexiones
+ConnectionManager.count # => Total de conexiones activas
+
+# Métricas de canales
+Channel.subscribers("room1").size # => Usuarios en canal
+
+# Métricas de presencia
+Presence.count_by({"status" => "online"}) # => Usuarios online
+```
+
+### Eventos de Sistema
+
+```crystal
+# Registrar eventos del sistema
+Events.on("system_event") do |socket, data|
+  case data["event"]
+  when "connection_limit"
+    notify_admin("Límite de conexiones alcanzado")
+  when "high_memory"
+    cleanup_inactive_connections
+  end
+end
+```
+
+## Patrones de Implementación
+
+### Chat en Tiempo Real
+
+```crystal
+# Servidor
+handler = Handler.new(
+  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
+    case data["type"].as_s
+    when "chat_message"
+      Channel.broadcast_to("chat", {
+        type: "message",
+        user: ConnectionManager.get_identifier(socket),
+        text: data["text"].as_s,
+        timestamp: Time.local.to_s
+      })
+    end
+  }
+)
+
+# Cliente
+ws.send(JSON.stringify({
+  type: "chat_message",
+  text: "¡Hola a todos!"
+}))
+```
+
+### Sistema de Notificaciones
+
+```crystal
+# Servidor
+Events.on("notification") do |socket, data|
+  group = data["group"].as_s
+  ConnectionManager.send_to_group(group, {
+    type: "notification",
+    title: data["title"].as_s,
+    body: data["body"].as_s,
+    priority: data["priority"]?.try(&.as_i) || 0
+  }.to_json)
+end
+
+# Cliente
+ws.send(JSON.stringify({
+  type: "notification",
+  group: "admins",
+  title: "Nueva alerta",
+  body: "Se requiere atención",
+  priority: 1
+}))
+```
+
+### Dashboard en Tiempo Real
+
+```crystal
+# Servidor
+handler = Handler.new(
+  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+    Channel.subscribe("metrics", socket, params["user_id"].as_s)
+  }
+)
+
+# Actualización periódica
+spawn do
+  loop do
+    metrics = collect_system_metrics
+    Channel.broadcast_to("metrics", {
+      type: "metrics_update",
+      data: metrics
+    })
+    sleep 5.seconds
+  end
+end
+```
+
+## Rendimiento y Optimización
+
+### Configuración Recomendada
+
+```crystal
+# Configuración para alto rendimiento
+server = HTTP::Server.new do |context|
+  # Aumentar buffer de mensajes
+  context.response.headers["X-Accel-Buffering"] = "no"
+  
+  router.call(context)
+end
+
+server.bind_tcp("0.0.0.0", 3000, reuse_port: true)
+```
+
+### Límites y Throttling
+
+```crystal
+# Configurar límites
+MAX_CONNECTIONS = 10_000
+MAX_MESSAGE_SIZE = 64.kilobytes
+RATE_LIMIT = 100 # mensajes por segundo
+
+# Aplicar límites
+handler = Handler.new(
+  before_accept: ->(context : HTTP::Server::Context) {
+    return false if ConnectionManager.count >= MAX_CONNECTIONS
+    true
+  },
+  
+  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
+    # Verificar tamaño del mensaje
+    if data.to_json.bytesize > MAX_MESSAGE_SIZE
+      socket.close(1009, "Message too large")
+      return
+    end
+    # Procesar mensaje...
+  }
+)
+```
+
+## Depuración
+
+### Modo Debug
+
+```crystal
+# Habilitar logging detallado
+Log.setup do |c|
+  backend = Log::IOBackend.new
+  c.bind "hauyna.websocket.*", :debug, backend
+end
+
+# Ejemplo de logs
+log.debug { "Nueva conexión WebSocket" }
+log.info { "Mensaje recibido: #{message}" }
+log.error { "Error al procesar mensaje: #{ex.message}" }
+```
+
+### Herramientas de Diagnóstico
+
+```crystal
+# Inspeccionar estado del sistema
+puts "Conexiones activas: #{ConnectionManager.count}"
+puts "Canales activos: #{Channel.list_channels}"
+puts "Usuarios online: #{Presence.count}"
+
+# Depurar conexión específica
+if socket = ConnectionManager.get_socket("user123")
+  puts "Canales suscritos: #{Channel.subscribed_channels(socket)}"
+  puts "Grupos: #{ConnectionManager.get_user_groups(socket)}"
+end
+```

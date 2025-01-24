@@ -2,6 +2,9 @@ require "json"
 require "http/web_socket"
 require "./connection_manager"
 require "./heartbeat"
+require "./message_validator"
+require "./error_handler"
+require "./channel"
 
 module Hauyna
   module WebSocket
@@ -37,20 +40,57 @@ module Hauyna
         
         if identifier_proc = @extract_identifier
           identifier = identifier_proc.call(socket, json_params)
-          ConnectionManager.register(socket, identifier) if identifier
+          if identifier
+            ConnectionManager.register(socket, identifier)
+            
+            # Auto-suscribir al canal principal si existe
+            if default_channel = params["channel"]?.try(&.as_s)
+              Channel.subscribe(default_channel, socket, identifier, {
+                "user_id" => JSON::Any.new(identifier)
+              })
+            end
+          end
         end
 
         if open_proc = @on_open
-          open_proc.call(socket, json_params)
+          begin
+            open_proc.call(socket, json_params)
+          rescue ex
+            ErrorHandler.handle(socket, ex)
+          end
         end
 
         socket.on_message do |message|
           if message_proc = @on_message
             begin
               parsed_message = JSON.parse(message)
-              message_proc.call(socket, parsed_message)
-            rescue JSON::ParseException
-              message_proc.call(socket, JSON::Any.new(message))
+              MessageValidator.validate_message(parsed_message)
+              
+              # Manejar mensajes específicos de canales
+              case parsed_message["type"]?.try(&.as_s)
+              when "subscribe_channel"
+                if channel = parsed_message["channel"]?.try(&.as_s)
+                  if identifier = ConnectionManager.get_identifier(socket)
+                    Channel.subscribe(channel, socket, identifier)
+                  end
+                end
+              when "unsubscribe_channel"
+                if channel = parsed_message["channel"]?.try(&.as_s)
+                  Channel.unsubscribe(channel, socket)
+                end
+              when "channel_message"
+                if channel = parsed_message["channel"]?.try(&.as_s)
+                  if Channel.subscribed?(channel, socket)
+                    Channel.broadcast_to(channel, parsed_message["message"])
+                  end
+                end
+              else
+                message_proc.call(socket, parsed_message)
+              end
+            rescue ex : JSON::ParseException | MessageValidator::ValidationError
+              ErrorHandler.handle(socket, ex)
+            rescue ex
+              ErrorHandler.handle(socket, ex)
             end
           end
         end
@@ -59,6 +99,7 @@ module Hauyna
           if close_proc = @on_close
             close_proc.call(socket)
           end
+          Channel.cleanup_socket(socket)
           ConnectionManager.unregister(socket)
           if heartbeat = @heartbeat
             heartbeat.cleanup(socket)

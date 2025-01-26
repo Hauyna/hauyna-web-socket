@@ -22,7 +22,33 @@
 - 📨 Broadcast y mensajes directos
 - 🎭 Roles y permisos por grupo
 
-## Características Detalladas
+## Tabla de Contenidos
+
+- [Características](#características)
+- [Arquitectura](#arquitectura)
+  - [Diagrama General](#diagrama-general)
+  - [Flujo de Mensajes](#flujo-de-mensajes)
+  - [Arquitectura de Canales](#arquitectura-de-canales)
+  - [Sistema de Presencia](#sistema-de-presencia)
+- [Instalación](#instalación)
+- [Uso](#uso)
+  - [Configurando el Enrutador](#configurando-el-enrutador)
+  - [Creando un Manejador de WebSocket](#creando-un-manejador-de-websocket)
+  - [Gestionando Canales](#gestionando-canales)
+  - [Manejo de Eventos](#manejo-de-eventos)
+  - [Gestionando Conexiones y Grupos](#gestionando-conexiones-y-grupos)
+  - [Seguimiento de Presencia](#seguimiento-de-presencia)
+  - [Manejo de Errores](#manejo-de-errores)
+  - [Mecanismo de Heartbeat](#mecanismo-de-heartbeat)
+- [Referencia de la API](#referencia-de-la-api)
+- [Ejemplos](#ejemplos)
+- [Ejemplos Prácticos](#ejemplos-prácticos)
+- [Contribuciones](#contribuciones)
+- [Autores](#autores)
+- [Licencia](#licencia)
+
+
+## Características 
 
 ### Sistema de Canales
 - **Suscripciones Flexibles**: Suscribe sockets a múltiples canales con metadatos personalizados
@@ -72,41 +98,6 @@
 - **Extracción de Parámetros**: Parse automático de query params
 - **Validación**: Verificación de upgrade y conexión WebSocket
 - **Manejo de Contexto**: Acceso al contexto HTTP completo
-
-## Tabla de Contenidos
-
-- [Características](#características)
-- [Arquitectura](#arquitectura)
-  - [Diagrama General](#diagrama-general)
-  - [Flujo de Mensajes](#flujo-de-mensajes)
-  - [Arquitectura de Canales](#arquitectura-de-canales)
-  - [Sistema de Presencia](#sistema-de-presencia)
-- [Instalación](#instalación)
-- [Uso](#uso)
-  - [Configurando el Enrutador](#configurando-el-enrutador)
-  - [Creando un Manejador de WebSocket](#creando-un-manejador-de-websocket)
-  - [Gestionando Canales](#gestionando-canales)
-  - [Manejo de Eventos](#manejo-de-eventos)
-  - [Gestionando Conexiones y Grupos](#gestionando-conexiones-y-grupos)
-  - [Seguimiento de Presencia](#seguimiento-de-presencia)
-  - [Manejo de Errores](#manejo-de-errores)
-  - [Mecanismo de Heartbeat](#mecanismo-de-heartbeat)
-- [Referencia de la API](#referencia-de-la-api)
-- [Ejemplos](#ejemplos)
-- [Ejemplos Prácticos](#ejemplos-prácticos)
-- [Contribuciones](#contribuciones)
-- [Autores](#autores)
-- [Licencia](#licencia)
-
-## Características
-
-- **Gestión de Canales**: Organiza las comunicaciones por tópicos con un sistema de canales robusto.
-- **Gestión de Conexiones**: Maneja conexiones WebSocket de manera eficiente, incluyendo la gestión de grupos.
-- **Manejo de Eventos**: Registra y dispara eventos personalizados para una interactividad mejorada.
-- **Seguimiento de Presencia**: Monitorea la presencia de usuarios en tiempo real con soporte de metadatos.
-- **Mecanismo de Heartbeat**: Asegura la salud de las conexiones con comprobaciones automáticas de ping/pong.
-- **Manejo de Errores**: Maneja y responde de forma elegante a diversos errores de WebSocket.
-- **Enrutamiento**: Enruta conexiones WebSocket basadas en rutas URL con parámetros dinámicos.
 
 ## Arquitectura
 
@@ -196,7 +187,7 @@ Añade la dependencia a tu `shard.yml`:
 ```yaml
 dependencies:
   hauyna-web-socket:
-    github: tuusuario/hauyna-web-socket
+    github: Hauyna/hauyna-web-socket
     version: ~> 1.0.0
 ```
 
@@ -490,34 +481,6 @@ function connect() {
     setTimeout(connect, 5000);
   };
 }
-```
-
-### Python
-```python
-import websockets
-import asyncio
-import json
-
-async def connect_websocket():
-    uri = "ws://localhost:8080/chat?user_id=123"
-    
-    async with websockets.connect(uri) as websocket:
-        # Suscribirse al canal
-        await websocket.send(json.dumps({
-            "type": "subscribe_channel",
-            "channel": "general"
-        }))
-        
-        while True:
-            try:
-                message = await websocket.recv()
-                data = json.dumps(message)
-                print(f"Mensaje recibido: {data}")
-            except websockets.ConnectionClosed:
-                print("Conexión cerrada")
-                break
-
-asyncio.get_event_loop().run_until_complete(connect_websocket())
 ```
 
 ## Ejemplos Prácticos

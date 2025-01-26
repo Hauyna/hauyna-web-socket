@@ -10,7 +10,7 @@
 
 - [ ] Estabilidad y Errores
   - [ ] Mejor manejo de errores de conexión
-  - [ ] Manejo mejorado de desconexiones
+  - [x] Manejo mejorado de desconexiones y reconexiones
   - [ ] Estados de conexión detallados
 
 - [ ] Documentación Esencial

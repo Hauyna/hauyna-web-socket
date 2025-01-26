@@ -1,635 +1,114 @@
 # Hauyna WebSocket
 
-Hauyna WebSocket es una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona una API intuitiva y robusta para manejar conexiones WebSocket, gestionar grupos de usuarios y enviar mensajes de manera eficiente.
+[![Crystal](https://img.shields.io/badge/Crystal-1.14.0-black?style=flat&logo=crystal&logoColor=white)](https://crystal-lang.org)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/hauyna/hauyna-web-socket?include_prereleases&style=flat)](https://github.com/hauyna/hauyna-web-socket/releases)
+[![Build Status](https://github.com/hauyna/hauyna-web-socket/workflows/CI/badge.svg)](https://github.com/hauyna/hauyna-web-socket/actions)
 
-  🚀 Sistema de canales y grupos para organizar comunicaciones
-
-  🔒 Manejo seguro y thread-safe de conexiones
-
-  ♻️ Reconexión automática y sistema de heartbeat
-
-  👥 Sistema de presencia en tiempo real
-
-  🔌 API intuitiva y fácil de usar
-
-  📦 Integración sencilla con aplicaciones Crystal
-
-  ⚡ Alto rendimiento y baja latencia
-
-  🛡️ Validación de mensajes incorporada
-
-  🔄 Manejo automático de reconexiones
-  
-  📊 Monitoreo de estado de conexiones
+**Hauyna WebSocket** es una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona un conjunto completo de herramientas para gestionar conexiones WebSocket, canales, grupos, seguimiento de presencia, manejo de eventos y más.
 
 
-## Índice
+🚀 **Características Destacadas**:
+- 📡 Sistema de canales para comunicación en tiempo real
+- 👥 Gestión avanzada de grupos y conexiones
+- 🔄 Eventos personalizables y sistema de presencia
+- ❤️ Monitoreo de salud con heartbeat automático
+- 🛡️ Manejo robusto de errores
+- 🎯 Enrutamiento dinámico de WebSockets
+- 🔍 Validación de mensajes
+- 👀 Sistema de presencia en tiempo real
+- 🔐 Gestión de sesiones y autenticación
+- 🌐 Soporte para múltiples canales
+- 📊 Metadatos personalizables
+- 🔄 Reconexión automática
+- 📨 Broadcast y mensajes directos
+- 🎭 Roles y permisos por grupo
 
-- [Características Principales](#características-principales)
-  - [Gestión de Conexiones](#gestión-de-conexiones)
-  - [Sistema de Grupos](#sistema-de-grupos)
-  - [Patrones de Mensajería](#patrones-de-mensajería)
-  - [Manejo de Eventos](#manejo-de-eventos)
-  - [Características de Seguridad](#características-de-seguridad)
-  - [Características Destacadas](#características-destacadas)
-  - [Características del Sistema](#características-del-sistema)
-  - [Sistema de Canales](#sistema-de-canales)
-  - [Sistema de Presencia](#sistema-de-presencia)
-- [Casos de Uso](#casos-de-uso)
-- [Instalación](#instalación)
-- [Uso Básico](#uso-básico)
-- [API](#api)
-- [Ventajas](#ventajas)
-- [Requisitos](#requisitos)
-- [Contribución](#contribución)
-- [Contribuidores](#contribuidores)
-- [Licencia](#licencia)
-
-
-## Características Principales
-
-### Gestión de Conexiones
-- Registro y seguimiento automático de conexiones WebSocket
-- Identificación única de clientes
-- Manejo seguro de desconexiones
-- Soporte para múltiples conexiones simultáneas
-
-### Sistema de Grupos
-- Creación dinámica de grupos de usuarios
-- Capacidad para añadir/remover usuarios de grupos
-- Envío de mensajes a grupos específicos
-- Gestión eficiente de membresías múltiples
-
-### Patrones de Mensajería
-- Broadcast a todos los clientes conectados
-- Envío dirigido a usuarios específicos
-- Mensajería grupal
-- Soporte para diferentes formatos de mensaje
-
-### Manejo de Eventos
-- Sistema de eventos personalizable
-- Callbacks para conexión, desconexión y mensajes
-- Manejo de errores robusto
-- Eventos personalizados definidos por el usuario
-
-### Características de Seguridad
-- Sincronización thread-safe con mutex
-- Manejo seguro de desconexiones inesperadas
-- Limpieza automática de conexiones muertas
-- Validación de mensajes y conexiones
-
-### Sistema de Heartbeat y Auto-Reconexión
-
-Hauyna WebSocket incluye un sistema robusto de heartbeat y auto-reconexión para mantener las conexiones estables:
-
-#### Heartbeat del Servidor
-
-```crystal
-# Configurar handler con heartbeat
-handler = Hauyna::WebSocket::Handler.new(
-  heartbeat_interval: 30.seconds,  # Intervalo entre pings
-  heartbeat_timeout: 60.seconds,   # Tiempo máximo sin respuesta
-  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    puts "Nueva conexión establecida"
-  }
-)
-
-# El heartbeat se maneja automáticamente:
-# - Envía pings periódicos
-# - Monitorea pongs
-# - Cierra conexiones inactivas
-# - Limpia recursos automáticamente
-```
-
-#### Cliente con Auto-Reconexión
-
-```javascript
-class WebSocketClient {
-  constructor(url, options = {}) {
-    this.url = url;
-    this.options = {
-      reconnectInterval: 1000,      // Intervalo entre intentos
-      maxReconnectAttempts: 5,      // Máximo de intentos
-      heartbeatInterval: 30000,     // Intervalo de heartbeat
-      ...options
-    };
-    
-    this.connect();
-  }
-
-  connect() {
-    this.ws = new WebSocket(this.url);
-    this.setupHeartbeat();
-    this.setupReconnection();
-  }
-
-  setupHeartbeat() {
-    // Enviar heartbeat periódicamente
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'heartbeat' }));
-      }
-    }, this.options.heartbeatInterval);
-  }
-
-  setupReconnection() {
-    this.ws.onclose = () => {
-      if (this.reconnectAttempts < this.options.maxReconnectAttempts) {
-        setTimeout(() => this.connect(), this.options.reconnectInterval);
-        this.reconnectAttempts++;
-      }
-    };
-  }
-}
-
-// Uso del cliente
-const ws = new WebSocketClient('ws://localhost:3000/chat', {
-  reconnectInterval: 2000,
-  maxReconnectAttempts: 3,
-  heartbeatInterval: 25000
-});
-```
-
-#### Características del Sistema
-
-- **Heartbeat del Servidor**:
-  - 🔄 Monitoreo automático de conexiones activas
-  - ⏱️ Intervalos configurables de ping/pong
-  - 🚫 Cierre automático de conexiones muertas
-  - 🧹 Limpieza automática de recursos
-
-- **Auto-Reconexión del Cliente**:
-  - 🔁 Reconexión automática en desconexiones
-  - ⚙️ Intentos de reconexión configurables
-  - ⏰ Intervalos de espera personalizables
-  - 📊 Eventos para monitorear el estado
-
-- **Beneficios**:
-  - 💪 Conexiones más estables y robustas
-  - 🛡️ Recuperación automática de fallos
-  - 📉 Reducción de conexiones fantasma
-  - 🔍 Mejor monitoreo del estado de conexión
+## Características Detalladas
 
 ### Sistema de Canales
-- Suscripción y desuscripción dinámica a canales
-- Mensajería específica por canal
-- Auto-suscripción a canales al conectar
-- Metadata personalizable por suscripción
-- Broadcast eficiente a todos los miembros del canal
-- Limpieza automática de suscripciones
+- **Suscripciones Flexibles**: Suscribe sockets a múltiples canales con metadatos personalizados
+- **Broadcast Selectivo**: Envía mensajes a canales específicos o grupos de usuarios
+- **Gestión de Suscriptores**: Monitorea y administra suscriptores por canal
+- **Eventos de Canal**: Notificaciones automáticas de suscripción/desuscripción
+- **Metadatos por Canal**: Almacena información adicional por suscripción
 
 ### Sistema de Presencia
-- Seguimiento en tiempo real de usuarios conectados
-- Metadata personalizable por usuario
-- Notificaciones de cambios de presencia
-- Integración automática con canales
-- Consulta de usuarios activos por grupo
-- Estado de presencia persistente
-
-### Diferencia entre Canales y Grupos
-
-#### Canales
-- **Propósito**: Comunicación en tiempo real y streaming de datos
-- **Características**:
-  - Suscripción explícita
-  - Sistema de eventos propio
-  - Mensajería bidireccional
-  - Ideal para chats y streams
-  - Estado de presencia por canal
-
-```crystal
-# Ejemplo de uso de canales
-Channel.subscribe("sala-chat", socket, user_id)
-Channel.broadcast_to("sala-chat", mensaje)
-
-# Ejemplo de grupos
-ConnectionManager.add_to_group(user_id, "moderadores")
-ConnectionManager.send_to_group("moderadores", notificacion)
-```
-
-#### Grupos
-- **Propósito**: Organización lógica y control de acceso
-- **Características**:
-  - Categorización de usuarios
-  - Control de permisos
-  - Segmentación de usuarios
-  - Ideal para roles y accesos
-  - Notificaciones grupales
-
-```crystal
-# Ejemplo de uso de grupos
-ConnectionManager.add_to_group(user_id, "moderadores")
-
-# Enviar notificación a un grupo
-ConnectionManager.send_to_group("moderadores", {
-  type: "notification",
-  content: "Nueva alerta de moderación"
-})
-
-# Verificar pertenencia a grupo
-ConnectionManager.is_in_group?(user_id, "moderadores")
-```
-
-#### Uso Combinado
-```crystal
-# Usuario en canal con rol específico
-Channel.subscribe("support-chat", socket, user_id, {
-  "group" => JSON::Any.new("support_team"),
-  "role" => JSON::Any.new("agent")
-})
-
-# Listar usuarios por canal y grupo
-Presence.list_by({
-  "channel" => "support-chat",
-  "group" => "support_team"
-})
-```
-
-## Casos de Uso
-
-La biblioteca es ideal para implementar:
-
-- Chats en tiempo real
-- Sistemas de notificaciones push
-- Monitoreo en vivo
-- Juegos multijugador
-- Aplicaciones colaborativas
-- Dashboards en tiempo real
-- Sistemas IoT
-- Streaming de datos
-
-## Instalación
-
-1. Agrega la dependencia a tu `shard.yml`:
-
-```yaml
-dependencies:
-  hauyna-web-socket:
-    github: tu-usuario/hauyna-web-socket
-```
-
-2. Instala las dependencias:
-
-```bash
-shards install
-```
-
-3. Importa la librería:
-
-```crystal
-require "hauyna-web-socket"
-```
-
-## Uso Básico
-
-```crystal
-require "hauyna-web-socket"
-
-# Crear un manejador WebSocket
-handler = Hauyna::WebSocket::Handler.new(
-  # Identificar usuarios únicos
-  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    params["user_id"]?.try(&.as_s)
-  },
-
-  # Manejar conexión nueva
-  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    user_id = params["user_id"]?.try(&.as_s)
-    room = params["room"]?.try(&.as_s) || "general"
-    
-    # Agregar usuario a un grupo
-    Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, room) if user_id
-    
-    # Notificar a todos en el grupo
-    Hauyna::WebSocket::Events.send_to_group(room, {
-      type: "user_joined",
-      user: user_id
-    }.to_json)
-  },
-
-  # Manejar mensajes
-  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
-    case data["type"]?.try(&.as_s)
-    when "broadcast"
-      Hauyna::WebSocket::Events.broadcast(data["message"].to_json)
-    when "private"
-      if recipient = data["to"]?.try(&.as_s)
-        Hauyna::WebSocket::Events.send_to_one(recipient, data["message"].to_json)
-      end
-    when "group"
-      if group = data["room"]?.try(&.as_s)
-        Hauyna::WebSocket::Events.send_to_group(group, data["message"].to_json)
-      end
-    end
-  }
-)
-
-# Configurar rutas
-router = Hauyna::WebSocket::Router.new
-router.websocket("/chat", handler)
-
-# Iniciar servidor
-server = HTTP::Server.new do |context|
-  router.call(context)
-end
-
-server.listen("0.0.0.0", 3000)
-```
-
-### Cliente JavaScript
-
-```javascript
-// Conectar con parámetros
-const ws = new WebSocket('ws://localhost:3000/chat?user_id=123&room=general');
-
-// Enviar mensaje broadcast
-ws.send(JSON.stringify({
-  type: 'broadcast',
-  message: 'Hola a todos!'
-}));
-
-// Enviar mensaje privado
-ws.send(JSON.stringify({
-  type: 'private',
-  to: 'user456',
-  message: 'Hola usuario específico!'
-}));
-
-// Enviar mensaje a grupo
-ws.send(JSON.stringify({
-  type: 'group',
-  room: 'general',
-  message: 'Hola grupo!'
-}));
-
-// Recibir mensajes
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Mensaje recibido:', data);
-};
-```
-
-### Ejemplo de Uso con Canales y Presencia
-
-```crystal
-# Servidor
-handler = Hauyna::WebSocket::Handler.new(
-  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    params["user_id"]?.try(&.as_s)
-  },
-  
-  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    user_id = params["user_id"]?.try(&.as_s)
-    
-    # Auto-suscribir al canal general
-    if user_id
-      Channel.subscribe("general", socket, user_id, {
-        "name" => JSON::Any.new("Usuario #{user_id}"),
-        "status" => JSON::Any.new("online")
-      })
-    end
-  }
-)
-
-# Configurar rutas
-router = Hauyna::WebSocket::Router.new
-router.websocket("/chat", handler)
-```
-
-```javascript
-// Cliente
-const ws = new WebSocket('ws://localhost:3000/chat?user_id=123');
-
-// Suscribirse a un canal
-ws.send(JSON.stringify({
-  type: 'subscribe_channel',
-  channel: 'room1'
-}));
-
-// Enviar mensaje a un canal
-ws.send(JSON.stringify({
-  type: 'channel_message',
-  channel: 'room1',
-  message: {
-    text: '¡Hola a todos en room1!'
-  }
-}));
-
-// Escuchar eventos de presencia y canal
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  
-  switch(data.type) {
-    case 'presence_change':
-      console.log(`Usuario ${data.user} ${data.event}`);
-      break;
-    case 'channel_event':
-      console.log(`Evento de canal: ${data.event}`);
-      break;
-  }
-};
-```
-
-### API de Canales
-
-#### Suscripción
-```crystal
-# Suscribir a un canal con metadata
-Channel.subscribe(
-  channel: "room1",
-  socket: websocket,
-  identifier: "user123",
-  metadata: {"name" => JSON::Any.new("Juan")}
-)
-```
-
-#### Broadcast
-```crystal
-# Enviar mensaje a todos en el canal
-Channel.broadcast_to("room1", {
-  type: "message",
-  text: "Hola canal!"
-})
-```
-
-#### Consultas
-```crystal
-# Listar suscriptores
-Channel.subscribers("room1") # => ["user1", "user2"]
-
-# Verificar suscripción
-Channel.subscribed?("room1", socket) # => true/false
-
-# Obtener canales de un socket
-Channel.subscribed_channels(socket) # => ["room1", "room2"]
-```
-
-### API de Presencia
-
-#### Seguimiento y Actualización
-```crystal
-# Registrar presencia con contexto
-Presence.track("user123", {
-  "name" => JSON::Any.new("Juan"),
-  "status" => JSON::Any.new("online"),
-  "channel" => JSON::Any.new("room1"),
-  "group" => JSON::Any.new("admins")
-})
-
-# Actualizar estado
-Presence.update_state("user123", {
-  "status" => JSON::Any.new("away")
-})
-```
-
-#### Consultas por Contexto
-```crystal
-# Listar usuarios en un canal
-Presence.list(channel: "room1")
-
-# Listar usuarios en un grupo
-Presence.list(group: "admins")
-
-# Consulta por múltiples criterios
-Presence.list_by({
-  "channel" => "room1",
-  "status" => "online"
-})
-
-# Contar usuarios por contexto
-Presence.count_by({"status" => "online"}) # => 15
-
-# Obtener usuarios en un canal
-Presence.in_channel("room1") # => ["user1", "user2"]
-
-# Obtener usuarios en un grupo
-Presence.in_group("admins") # => ["admin1", "admin2"]
-```
-
-#### Verificaciones
-```crystal
-# Verificar presencia en contexto
-Presence.present_in?("user123", {
-  "channel" => "room1",
-  "status" => "online"
-}) # => true/false
-
-# Obtener estado actual
-Presence.get_state("user123") # => {"status" => "online", ...}
-```
-
-## Manejo de Errores
-
-### Tipos de Errores
-
-Hauyna WebSocket maneja diferentes tipos de errores de forma robusta y consistente:
-
-#### 1. Errores de Validación
-```crystal
-# Ejemplo de error de validación
-ws.send(JSON.stringify({
-  type: "broadcast" 
-  // Error: Falta el campo message
-}))
-
-// Respuesta del servidor
-{
-  "type": "error",
-  "error_type": "validation_error", 
-  "message": "El mensaje debe tener contenido"
-}
-```
-
-#### 2. Errores de Parsing
-```crystal
-# Ejemplo de error de parsing
-ws.send("mensaje inválido")
-
-// Respuesta del servidor
-{
-  "type": "error",
-  "error_type": "parse_error",
-  "message": "Formato de mensaje inválido"
-}
-```
-
-#### 3. Errores de Conexión
-```crystal
-# Códigos de cierre de conexión
-1000 - Cierre normal
-1001 - Going Away (timeout)
-1002 - Protocol Error
-1003 - Unsupported Data
-```
-
-### Manejo de Errores en el Cliente
-
-```javascript
-ws.onerror = (error) => {
-  console.error('Error WebSocket:', error);
-};
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  
-  if (data.type === 'error') {
-    switch(data.error_type) {
-      case 'validation_error':
-        handleValidationError(data.message);
-        break;
-      case 'parse_error':
-        handleParseError(data.message);
-        break;
-      case 'internal_error':
-        handleInternalError(data.message);
-        break;
-    }
-  }
-};
-```
-
-### Mejores Prácticas
-
-1. **Validación Preventiva**
-```javascript
-function sendMessage(message) {
-  // Validar antes de enviar
-  if (!message.type || !message.content) {
-    handleError('Mensaje incompleto');
-    return;
-  }
-  
-  ws.send(JSON.stringify(message));
-}
-```
-
-2. **Reintentos Inteligentes**
-```javascript
-let retryCount = 0;
-const MAX_RETRIES = 3;
-
-function reconnect() {
-  if (retryCount < MAX_RETRIES) {
-    setTimeout(() => {
-      connect();
-      retryCount++;
-    }, 1000 * Math.pow(2, retryCount));
-  }
-}
-```
-
-3. **Logging y Monitoreo**
-```javascript
-ws.onclose = (event) => {
-  console.log(`Conexión cerrada: ${event.code} - ${event.reason}`);
-  logConnectionEvent({
-    type: 'close',
-    code: event.code,
-    reason: event.reason,
-    timestamp: new Date()
-  });
-};
-```
+- **Estado en Tiempo Real**: Monitoreo del estado de usuarios (online/away/offline)
+- **Metadatos de Usuario**: Almacena información personalizada por usuario
+- **Filtrado por Contexto**: Busca usuarios por canal, grupo o criterios personalizados
+- **Eventos de Presencia**: Notificaciones automáticas de cambios de estado
+- **Estadísticas**: Conteo y análisis de usuarios presentes
+
+### Gestión de Conexiones
+- **Identificación Única**: Sistema de identificadores para conexiones
+- **Agrupación**: Organiza usuarios en grupos para mensajes dirigidos
+- **Mensajes Directos**: Envía mensajes a usuarios específicos
+- **Broadcast**: Envía mensajes a todos los usuarios o grupos
+- **Limpieza Automática**: Gestión de desconexiones y limpieza de recursos
+
+### Sistema de Eventos
+- **Eventos Personalizados**: Define y maneja eventos específicos de la aplicación
+- **Callbacks**: Manejadores de eventos flexibles
+- **Propagación**: Control sobre la propagación de eventos
+- **Tipos de Eventos**: Soporte para eventos de sistema y usuario
+- **Contexto**: Acceso al contexto completo en los manejadores
+
+### Heartbeat y Monitoreo
+- **Ping/Pong Automático**: Verificación periódica de conexiones
+- **Timeouts Configurables**: Ajusta intervalos de verificación
+- **Reconexión**: Manejo automático de reconexiones
+- **Estado de Conexión**: Monitoreo del estado de la conexión
+- **Limpieza**: Cierre automático de conexiones inactivas
+
+### Manejo de Errores
+- **Validación de Mensajes**: Verificación automática de formato y contenido
+- **Errores Tipados**: Diferentes tipos de errores para mejor manejo
+- **Respuestas de Error**: Formato consistente de mensajes de error
+- **Recuperación**: Estrategias de recuperación de errores
+- **Logging**: Registro detallado de errores
+
+### Enrutamiento
+- **Rutas Dinámicas**: Soporte para parámetros en URLs
+- **Middleware**: Procesamiento previo de conexiones
+- **Extracción de Parámetros**: Parse automático de query params
+- **Validación**: Verificación de upgrade y conexión WebSocket
+- **Manejo de Contexto**: Acceso al contexto HTTP completo
+
+## Tabla de Contenidos
+
+- [Características](#características)
+- [Arquitectura](#arquitectura)
+  - [Diagrama General](#diagrama-general)
+  - [Flujo de Mensajes](#flujo-de-mensajes)
+  - [Arquitectura de Canales](#arquitectura-de-canales)
+  - [Sistema de Presencia](#sistema-de-presencia)
+- [Instalación](#instalación)
+- [Uso](#uso)
+  - [Configurando el Enrutador](#configurando-el-enrutador)
+  - [Creando un Manejador de WebSocket](#creando-un-manejador-de-websocket)
+  - [Gestionando Canales](#gestionando-canales)
+  - [Manejo de Eventos](#manejo-de-eventos)
+  - [Gestionando Conexiones y Grupos](#gestionando-conexiones-y-grupos)
+  - [Seguimiento de Presencia](#seguimiento-de-presencia)
+  - [Manejo de Errores](#manejo-de-errores)
+  - [Mecanismo de Heartbeat](#mecanismo-de-heartbeat)
+- [Referencia de la API](#referencia-de-la-api)
+- [Ejemplos](#ejemplos)
+- [Ejemplos Prácticos](#ejemplos-prácticos)
+- [Contribuciones](#contribuciones)
+- [Autores](#autores)
+- [Licencia](#licencia)
+
+## Características
+
+- **Gestión de Canales**: Organiza las comunicaciones por tópicos con un sistema de canales robusto.
+- **Gestión de Conexiones**: Maneja conexiones WebSocket de manera eficiente, incluyendo la gestión de grupos.
+- **Manejo de Eventos**: Registra y dispara eventos personalizados para una interactividad mejorada.
+- **Seguimiento de Presencia**: Monitorea la presencia de usuarios en tiempo real con soporte de metadatos.
+- **Mecanismo de Heartbeat**: Asegura la salud de las conexiones con comprobaciones automáticas de ping/pong.
+- **Manejo de Errores**: Maneja y responde de forma elegante a diversos errores de WebSocket.
+- **Enrutamiento**: Enruta conexiones WebSocket basadas en rutas URL con parámetros dinámicos.
 
 ## Arquitectura
 
@@ -712,113 +191,570 @@ stateDiagram-v2
     Offline --> Online: Reconexión
 ```
 
-## API
+## Instalación
 
-### `Hauyna::WebSocket::Handler`
+Añade la dependencia a tu `shard.yml`:
+
+```yaml
+dependencies:
+  hauyna-web-socket:
+    github: tuusuario/hauyna-web-socket
+    version: ~> 1.0.0
+```
+
+Ejecuta `shards install` para instalar la shard.
+
+## Uso
+
+### Configurando el Enrutador
+
+Inicializa y configura el enrutador WebSocket para manejar diferentes rutas WebSocket.
 
 ```crystal
-# Crear un handler con todas las opciones
+require "hauyna-web-socket"
+
+router = Hauyna::WebSocket::Router.new
+
+# Define rutas WebSocket
+router.websocket "/chat", Hauyna::WebSocket::Handler.new(
+  on_open: ->(socket, params) {
+    puts "Conexión WebSocket abierta con parámetros: #{params}"
+  },
+  on_message: ->(socket, message) {
+    puts "Mensaje recibido: #{message}"
+    # Manejar mensajes entrantes
+  },
+  on_close: ->(socket) {
+    puts "Conexión WebSocket cerrada"
+  }
+)
+
+# Inicia el servidor HTTP con el enrutador WebSocket
+HTTP::Server.start("0.0.0.0", 8080) do |context|
+  if router.call(context)
+    # WebSocket fue manejado
+  else
+    context.response.status_code = 404
+    context.response.print "No Encontrado"
+  end
+end
+```
+
+### Creando un Manejador de WebSocket
+
+Personaliza el comportamiento de tus conexiones WebSocket definiendo manejadores para varios eventos.
+
+```crystal
 handler = Hauyna::WebSocket::Handler.new(
-  # Identificar conexiones
-  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    params["user_id"]?.try(&.as_s)
+  on_open: ->(socket, params) {
+    # Código a ejecutar cuando se abre una conexión
   },
-
-  # Manejar nueva conexión
-  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    puts "Nueva conexión: #{params["user_id"]?}"
+  on_message: ->(socket, message) {
+    # Código a ejecutar cuando se recibe un mensaje
   },
-
-  # Manejar mensajes
-  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
-    puts "Mensaje recibido: #{data}"
+  on_close: ->(socket) {
+    # Código a ejecutar cuando se cierra una conexión
   },
-
-  # Manejar desconexión
-  on_close: ->(socket : HTTP::WebSocket) {
-    puts "Conexión cerrada"
+  extract_identifier: ->(socket, params) {
+    # Extrae y devuelve un identificador único para la conexión
+    params["user_id"]?&.as_s
   },
-
-  # Manejar ping/pong
-  on_ping: ->(socket : HTTP::WebSocket, message : String) {
-    puts "Ping recibido: #{message}"
-  },
-
-  on_pong: ->(socket : HTTP::WebSocket, message : String) {
-    puts "Pong recibido: #{message}"
-  },
-
-  # Configurar heartbeat
   heartbeat_interval: 30.seconds,
   heartbeat_timeout: 60.seconds
 )
 ```
 
-### `Hauyna::WebSocket::Router`
+### Gestionando Canales
+
+Suscribe y desuscribe sockets a canales, y transmite mensajes a los suscriptores de un canal.
 
 ```crystal
-# Crear router y definir rutas
+# Suscribir un socket a un canal
+Hauyna::WebSocket::Channel.subscribe("deportes", socket, "usuario123", { "rol" => JSON::Any.new("admin") })
+
+# Desuscribir un socket de un canal
+Hauyna::WebSocket::Channel.unsubscribe("deportes", socket)
+
+# Transmitir un mensaje a todos los suscriptores de un canal
+Hauyna::WebSocket::Channel.broadcast_to("deportes", { type: "actualización", message: "¡Nuevo juego esta noche!" })
+
+# Listar todos los suscriptores de un canal
+suscriptores = Hauyna::WebSocket::Channel.subscribers("deportes")
+```
+
+### Manejo de Eventos
+
+Registra manejadores de eventos personalizados y dispara eventos según sea necesario.
+
+```crystal
+# Registrar un manejador de eventos para un evento personalizado
+Hauyna::WebSocket::Events.on("nuevo_mensaje") do |socket, data|
+  puts "Nuevo mensaje recibido: #{data}"
+  # Manejar el evento
+end
+
+# Disparar el evento personalizado
+Hauyna::WebSocket::Events.trigger_event("nuevo_mensaje", socket, { "contenido" => "¡Hola Mundo!" })
+```
+
+### Gestionando Conexiones y Grupos
+
+Gestiona conexiones individuales y organiza usuarios en grupos para mensajes dirigidos.
+
+```crystal
+# Registrar una nueva conexión
+Hauyna::WebSocket::ConnectionManager.register(socket, "usuario123")
+
+# Desregistrar una conexión
+Hauyna::WebSocket::ConnectionManager.unregister(socket)
+
+# Añadir un usuario a un grupo
+Hauyna::WebSocket::ConnectionManager.add_to_group("usuario123", "admins")
+
+# Remover un usuario de un grupo
+Hauyna::WebSocket::ConnectionManager.remove_from_group("usuario123", "admins")
+
+# Enviar un mensaje a un usuario específico
+Hauyna::WebSocket::ConnectionManager.send_to_one("usuario123", "Mensaje privado")
+
+# Enviar un mensaje a un grupo
+Hauyna::WebSocket::ConnectionManager.send_to_group("admins", "Anuncio del grupo")
+```
+
+### Seguimiento de Presencia
+
+Monitorea y gestiona la presencia de usuarios en tiempo real con metadatos personalizados.
+
+```crystal
+# Registrar la presencia de un usuario con metadatos
+Hauyna::WebSocket::Presence.track("usuario123", {
+  "status" => JSON::Any.new("online"),
+  "channel" => JSON::Any.new("deportes"),
+  "last_active" => JSON::Any.new(Time.local.to_s)
+})
+
+# Obtener lista de usuarios presentes
+usuarios_presentes = Hauyna::WebSocket::Presence.list
+
+# Obtener usuarios en un canal específico
+usuarios_canal = Hauyna::WebSocket::Presence.in_channel("deportes")
+
+# Actualizar estado de un usuario
+Hauyna::WebSocket::Presence.update_state("usuario123", {
+  "status" => JSON::Any.new("away")
+})
+
+# Verificar si un usuario está presente
+esta_presente = Hauyna::WebSocket::Presence.present?("usuario123")
+
+# Obtener conteo de usuarios presentes
+total_usuarios = Hauyna::WebSocket::Presence.count
+```
+
+### Manejo de Errores
+
+Gestiona errores de WebSocket de manera elegante y consistente.
+
+```crystal
+# Configurar manejador de errores personalizado
+handler = Hauyna::WebSocket::Handler.new(
+  on_message: ->(socket, message) {
+    begin
+      # Lógica que podría lanzar errores
+      raise "Error de prueba"
+    rescue ex
+      Hauyna::WebSocket::ErrorHandler.handle(socket, ex)
+    end
+  }
+)
+
+# Los errores son manejados automáticamente y enviados al cliente como:
+# {
+#   "type": "error",
+#   "error_type": "internal_error",
+#   "message": "Error interno del servidor"
+# }
+```
+
+### Mecanismo de Heartbeat
+
+Mantén conexiones saludables con verificaciones automáticas de ping/pong.
+
+```crystal
+# Configurar heartbeat al crear el manejador
+handler = Hauyna::WebSocket::Handler.new(
+  heartbeat_interval: 30.seconds,  # Intervalo entre pings
+  heartbeat_timeout: 60.seconds    # Tiempo máximo de espera para pong
+)
+
+# El sistema automáticamente:
+# 1. Envía pings cada 30 segundos
+# 2. Espera pongs del cliente
+# 3. Cierra conexiones que no respondan en 60 segundos
+```
+
+## Ejemplos
+
+### Chat en Tiempo Real
+
+```crystal
+require "hauyna-web-socket"
+
+# Configurar el enrutador
 router = Hauyna::WebSocket::Router.new
 
-# Ruta simple
-router.websocket("/chat", chat_handler)
+# Crear manejador para el chat
+chat_handler = Hauyna::WebSocket::Handler.new(
+  extract_identifier: ->(socket, params) {
+    params["user_id"]?.try(&.as_s)
+  },
+  on_open: ->(socket, params) {
+    user_id = params["user_id"]?.try(&.as_s)
+    if user_id
+      # Suscribir al canal general
+      Hauyna::WebSocket::Channel.subscribe("general", socket, user_id)
+      # Registrar presencia
+      Hauyna::WebSocket::Presence.track(user_id, {
+        "status" => JSON::Any.new("online"),
+        "channel" => JSON::Any.new("general")
+      })
+    end
+  },
+  on_message: ->(socket, message) {
+    # Broadcast al canal general
+    Hauyna::WebSocket::Channel.broadcast_to("general", message)
+  },
+  on_close: ->(socket) {
+    if user_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
+      Hauyna::WebSocket::Presence.untrack(user_id)
+    end
+  },
+  heartbeat_interval: 30.seconds
+)
 
-# Ruta con parámetros
-router.websocket("/rooms/:room_id/chat", room_handler)
+# Configurar ruta
+router.websocket "/chat", chat_handler
 
-# Usar el router en un servidor HTTP
+# Iniciar servidor
 server = HTTP::Server.new do |context|
-  # Procesar solicitudes WebSocket
-  next if router.call(context)
+  if router.call(context)
+    # WebSocket manejado
+  else
+    context.response.status_code = 404
+  end
+end
+
+puts "Servidor iniciado en http://localhost:8080"
+server.listen(8080)
+```
+
+## Uso del Cliente
+
+### JavaScript/TypeScript
+```javascript
+// Conexión básica
+const ws = new WebSocket('ws://localhost:8080/chat?user_id=123');
+
+// Manejo de eventos
+ws.onopen = () => {
+  console.log('Conectado al servidor');
   
-  # Manejar otras rutas HTTP
-  context.response.content_type = "text/plain"
-  context.response.print "No WebSocket route matched"
-end
+  // Suscribirse a un canal
+  ws.send(JSON.stringify({
+    type: 'subscribe_channel',
+    channel: 'general'
+  }));
+};
 
-server.listen("0.0.0.0", 3000)
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Mensaje recibido:', data);
+};
+
+// Enviar mensaje al canal
+function sendChannelMessage(channel, message) {
+  ws.send(JSON.stringify({
+    type: 'channel_message',
+    channel: channel,
+    message: message
+  }));
+}
+
+// Manejo de errores
+ws.onerror = (error) => {
+  console.error('Error en la conexión:', error);
+};
+
+// Reconexión automática
+function connect() {
+  ws.onclose = () => {
+    console.log('Conexión perdida. Intentando reconectar...');
+    setTimeout(connect, 5000);
+  };
+}
 ```
 
-### `Hauyna::WebSocket::Events`
+### Python
+```python
+import websockets
+import asyncio
+import json
 
+async def connect_websocket():
+    uri = "ws://localhost:8080/chat?user_id=123"
+    
+    async with websockets.connect(uri) as websocket:
+        # Suscribirse al canal
+        await websocket.send(json.dumps({
+            "type": "subscribe_channel",
+            "channel": "general"
+        }))
+        
+        while True:
+            try:
+                message = await websocket.recv()
+                data = json.dumps(message)
+                print(f"Mensaje recibido: {data}")
+            except websockets.ConnectionClosed:
+                print("Conexión cerrada")
+                break
+
+asyncio.get_event_loop().run_until_complete(connect_websocket())
+```
+
+## Ejemplos Prácticos
+
+### Sistema de Notificaciones en Tiempo Real
 ```crystal
-# Registrar manejadores de eventos
-Hauyna::WebSocket::Events.on("user_joined") do |socket, data|
-  user_id = data["user_id"].as_s
-  puts "Usuario #{user_id} se unió"
+# Configurar el manejador de notificaciones
+notification_handler = Hauyna::WebSocket::Handler.new(
+  extract_identifier: ->(socket, params) {
+    params["user_id"]?.try(&.as_s)
+  },
+  on_open: ->(socket, params) {
+    user_id = params["user_id"]?.try(&.as_s)
+    if user_id
+      # Suscribir al canal de notificaciones personal
+      Hauyna::WebSocket::Channel.subscribe("notifications:#{user_id}", socket, user_id)
+      # Registrar presencia con rol
+      Hauyna::WebSocket::Presence.track(user_id, {
+        "status" => JSON::Any.new("online"),
+        "role" => JSON::Any.new("user"),
+        "last_seen" => JSON::Any.new(Time.local.to_s)
+      })
+    end
+  }
+)
+
+# Enviar notificación a un usuario específico
+def send_notification(user_id : String, notification : Hash)
+  Hauyna::WebSocket::Channel.broadcast_to(
+    "notifications:#{user_id}",
+    {
+      type: "notification",
+      data: notification
+    }
+  )
 end
-
-Hauyna::WebSocket::Events.on("message_sent") do |socket, data|
-  message = data["message"].as_s
-  puts "Nuevo mensaje: #{message}"
-end
-
-# Disparar eventos
-Hauyna::WebSocket::Events.trigger_event("user_joined", socket, {
-  "user_id" => JSON::Any.new("123"),
-  "name" => JSON::Any.new("Juan")
-})
-
-Hauyna::WebSocket::Events.trigger_event("message_sent", socket, {
-  "message" => JSON::Any.new("¡Hola a todos!"),
-  "sender" => JSON::Any.new("123")
-})
 ```
 
-## Contribución
+### Sistema de Chat con Salas
+```crystal
+# Manejador de chat con salas
+chat_handler = Hauyna::WebSocket::Handler.new(
+  extract_identifier: ->(socket, params) {
+    params["user_id"]?.try(&.as_s)
+  },
+  on_message: ->(socket, message) {
+    case message["type"]?.try(&.as_s)
+    when "join_room"
+      room = message["room"]?.try(&.as_s)
+      user_id = ConnectionManager.get_identifier(socket)
+      if room && user_id
+        Channel.subscribe(room, socket, user_id, {
+          "joined_at" => JSON::Any.new(Time.local.to_s)
+        })
+      end
+    when "room_message"
+      room = message["room"]?.try(&.as_s)
+      content = message["content"]?.try(&.as_s)
+      if room && content
+        Channel.broadcast_to(room, {
+          type: "message",
+          user: ConnectionManager.get_identifier(socket),
+          content: content,
+          timestamp: Time.local.to_s
+        })
+      end
+    end
+  }
+)
+```
 
-1. Fork el repositorio
-2. Crea una rama para tu feature (`git checkout -b feature/amazing-feature`)
-3. Commit tus cambios (`git commit -am 'Add some amazing feature'`)
-4. Push a la rama (`git push origin feature/amazing-feature`)
-5. Crea un Pull Request
+### Sistema de Presencia Avanzado
+```crystal
+# Configurar presencia con estados personalizados
+presence_handler = Hauyna::WebSocket::Handler.new(
+  on_open: ->(socket, params) {
+    user_id = params["user_id"]?.try(&.as_s)
+    if user_id
+      Hauyna::WebSocket::Presence.track(user_id, {
+        "status" => JSON::Any.new("online"),
+        "activity" => JSON::Any.new("idle"),
+        "device" => JSON::Any.new(params["device"]?.try(&.as_s) || "unknown"),
+        "permissions" => JSON::Any.new([
+          "read",
+          "write"
+        ].to_json)
+      })
+    end
+  }
+)
 
-¿Encontraste un bug? ¿Tienes una idea? ¡Abre un issue!
+# Actualizar estado de actividad
+def update_user_activity(user_id : String, activity : String)
+  Hauyna::WebSocket::Presence.update_state(user_id, {
+    "activity" => JSON::Any.new(activity),
+    "last_activity" => JSON::Any.new(Time.local.to_s)
+  })
+end
 
-## Contribuidores
+# Obtener usuarios activos por criterios
+def get_active_users(criteria : Hash(String, String))
+  Hauyna::WebSocket::Presence.list_by(criteria)
+end
+```
 
-Hauyna WebSocket es una librería creada y mantenida por [José Antonio Padre García](https://github.com/Stockers-JAPG) y [Luis Antonio Padre García](https://github.com/LuisPadre25).
-Agradecemos tus comentarios, reportes de errores y sugerencias para seguir mejorando esta herramienta.
+### Sistema de Grupos y Permisos
+```crystal
+# Gestionar grupos y permisos
+def manage_user_groups(user_id : String)
+  # Añadir a grupo con rol
+  ConnectionManager.add_to_group(user_id, "admins")
+  
+  # Enviar mensaje solo a administradores
+  ConnectionManager.send_to_group("admins", {
+    type: "admin_notification",
+    message: "Nueva actualización disponible"
+  }.to_json)
+  
+  # Verificar permisos
+  if ConnectionManager.is_in_group?(user_id, "admins")
+    # Realizar acciones administrativas
+  end
+end
+```
+
+## Referencia Completa de la API
+
+### Clase Channel
+```crystal
+module Hauyna::WebSocket::Channel
+  # Suscribe un socket a un canal
+  def self.subscribe(channel : String, socket : HTTP::WebSocket, identifier : String, metadata = {} of String => JSON::Any)
+  
+  # Desuscribe un socket de un canal
+  def self.unsubscribe(channel : String, socket : HTTP::WebSocket)
+  
+  # Envía mensaje a todos los suscriptores de un canal
+  def self.broadcast_to(channel : String, message : Hash | String)
+  
+  # Lista suscriptores de un canal
+  def self.subscribers(channel : String) : Array(String)
+  
+  # Obtiene canales suscritos por un socket
+  def self.subscribed_channels(socket : HTTP::WebSocket) : Array(String)
+  
+  # Limpia todas las suscripciones de un socket
+  def self.cleanup_socket(socket : HTTP::WebSocket)
+  
+  # Verifica si un socket está suscrito a un canal
+  def self.subscribed?(channel : String, socket : HTTP::WebSocket) : Bool
+  
+  # Obtiene la metadata de una suscripción
+  def self.get_subscription_metadata(channel : String, socket : HTTP::WebSocket) : Hash(String, JSON::Any)?
+end
+```
+
+### Clase Presence
+```crystal
+module Hauyna::WebSocket::Presence
+  # Registra la presencia de un usuario
+  def self.track(identifier : String, metadata : Hash(String, JSON::Any))
+  
+  # Lista usuarios presentes
+  def self.list(channel : String? = nil, group : String? = nil) : Hash(String, Hash(String, JSON::Any))
+  
+  # Lista usuarios por criterios
+  def self.list_by(criteria : Hash(String, String)) : Hash(String, Hash(String, JSON::Any))
+  
+  # Verifica presencia en contexto
+  def self.present_in?(identifier : String, context : Hash(String, String)) : Bool
+  
+  # Cuenta usuarios por contexto
+  def self.count_by(context : Hash(String, String)? = nil) : Int32
+  
+  # Obtiene usuarios en canal
+  def self.in_channel(channel : String) : Array(String)
+  
+  # Obtiene usuarios en grupo
+  def self.in_group(group : String) : Array(String)
+  
+  # Obtiene estado de usuario
+  def self.get_state(identifier : String) : Hash(String, JSON::Any)?
+  
+  # Actualiza estado de usuario
+  def self.update_state(identifier : String, updates : Hash(String, JSON::Any))
+  
+  # Elimina presencia de usuario
+  def self.untrack(identifier : String)
+end
+```
+
+### Clase ConnectionManager
+```crystal
+module Hauyna::WebSocket::ConnectionManager
+  # Registra una nueva conexión
+  def self.register(socket : HTTP::WebSocket, identifier : String)
+  
+  # Desregistra una conexión
+  def self.unregister(socket : HTTP::WebSocket)
+  
+  # Obtiene socket por identificador
+  def self.get_socket(identifier : String) : HTTP::WebSocket?
+  
+  # Añade usuario a grupo
+  def self.add_to_group(identifier : String, group_name : String)
+  
+  # Remueve usuario de grupo
+  def self.remove_from_group(identifier : String, group_name : String)
+  
+  # Envía mensaje a todos
+  def self.broadcast(message : String)
+  
+  # Envía mensaje a usuario específico
+  def self.send_to_one(identifier : String, message : String)
+  
+  # Envía mensaje a múltiples usuarios
+  def self.send_to_many(identifiers : Array(String), message : String)
+  
+  # Envía mensaje a grupo
+  def self.send_to_group(group_name : String, message : String)
+  
+  # Obtiene miembros de grupo
+  def self.get_group_members(group_name : String) : Set(String)
+  
+  # Obtiene grupos de usuario
+  def self.get_user_groups(identifier : String) : Array(String)
+  
+  # Verifica pertenencia a grupo
+  def self.is_in_group?(identifier : String, group_name : String) : Bool
+end
+```
+
+## Autores
+
+Hauyna WebSocket es una librería creada y mantenida por:
 
 <table>
   <tr>
@@ -830,7 +766,7 @@ Agradecemos tus comentarios, reportes de errores y sugerencias para seguir mejor
     </td>
         <td align="center">
       <a href="https://github.com/LuisPadre25">
-        <img src="https://github.com/LuisPadre25.png" width="100px;" alt="José Antonio Padre García"/><br />
+        <img src="https://github.com/LuisPadre25.png" width="100px;" alt="Luis Antonio Padre García"/><br />
         <sub><b>Luis Antonio Padre García</b></sub>
       </a>
     </td>
@@ -839,227 +775,9 @@ Agradecemos tus comentarios, reportes de errores y sugerencias para seguir mejor
 
 ## Licencia
 
-
-**Hauyna** se distribuye bajo la [Licencia MIT](https://opensource.org/licenses/MIT).  
-Siéntete libre de usarla en proyectos personales o comerciales.  
-¡Aporta mejoras si lo deseas!
+Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
 
 ---
 
 **¡Disfruta desarrollando aplicaciones WebSocket potentes y rápidas con Hauyna!**  
 Si encuentras problemas o sugerencias, crea un _issue_ en el repositorio oficial.
-
-## Seguridad y Thread Safety
-
-### Mutex y Sincronización
-
-Hauyna implementa un sistema robusto de sincronización usando Mutex para garantizar operaciones thread-safe:
-
-```crystal
-# Ejemplo de operación thread-safe en ConnectionManager
-@@mutex.synchronize do
-  @@connections[identifier] = socket
-  @@socket_to_identifier[socket] = identifier
-end
-```
-
-### Mejores Prácticas de Seguridad
-
-1. **Validación de Mensajes**
-```crystal
-# Validar mensajes antes de procesarlos
-MessageValidator.validate_message(parsed_message)
-```
-
-2. **Limpieza de Recursos**
-```crystal
-# Limpieza automática al cerrar conexión
-Channel.cleanup_socket(socket)
-ConnectionManager.unregister(socket)
-```
-
-3. **Manejo de Timeouts**
-```crystal
-# Configuración de timeouts
-handler = Handler.new(
-  heartbeat_interval: 30.seconds,
-  heartbeat_timeout: 60.seconds
-)
-```
-
-## Monitoreo y Diagnóstico
-
-### Métricas Disponibles
-
-```crystal
-# Métricas de conexiones
-ConnectionManager.count # => Total de conexiones activas
-
-# Métricas de canales
-Channel.subscribers("room1").size # => Usuarios en canal
-
-# Métricas de presencia
-Presence.count_by({"status" => "online"}) # => Usuarios online
-```
-
-### Eventos de Sistema
-
-```crystal
-# Registrar eventos del sistema
-Events.on("system_event") do |socket, data|
-  case data["event"]
-  when "connection_limit"
-    notify_admin("Límite de conexiones alcanzado")
-  when "high_memory"
-    cleanup_inactive_connections
-  end
-end
-```
-
-## Patrones de Implementación
-
-### Chat en Tiempo Real
-
-```crystal
-# Servidor
-handler = Handler.new(
-  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
-    case data["type"].as_s
-    when "chat_message"
-      Channel.broadcast_to("chat", {
-        type: "message",
-        user: ConnectionManager.get_identifier(socket),
-        text: data["text"].as_s,
-        timestamp: Time.local.to_s
-      })
-    end
-  }
-)
-
-# Cliente
-ws.send(JSON.stringify({
-  type: "chat_message",
-  text: "¡Hola a todos!"
-}))
-```
-
-### Sistema de Notificaciones
-
-```crystal
-# Servidor
-Events.on("notification") do |socket, data|
-  group = data["group"].as_s
-  ConnectionManager.send_to_group(group, {
-    type: "notification",
-    title: data["title"].as_s,
-    body: data["body"].as_s,
-    priority: data["priority"]?.try(&.as_i) || 0
-  }.to_json)
-end
-
-# Cliente
-ws.send(JSON.stringify({
-  type: "notification",
-  group: "admins",
-  title: "Nueva alerta",
-  body: "Se requiere atención",
-  priority: 1
-}))
-```
-
-### Dashboard en Tiempo Real
-
-```crystal
-# Servidor
-handler = Handler.new(
-  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
-    Channel.subscribe("metrics", socket, params["user_id"].as_s)
-  }
-)
-
-# Actualización periódica
-spawn do
-  loop do
-    metrics = collect_system_metrics
-    Channel.broadcast_to("metrics", {
-      type: "metrics_update",
-      data: metrics
-    })
-    sleep 5.seconds
-  end
-end
-```
-
-## Rendimiento y Optimización
-
-### Configuración Recomendada
-
-```crystal
-# Configuración para alto rendimiento
-server = HTTP::Server.new do |context|
-  # Aumentar buffer de mensajes
-  context.response.headers["X-Accel-Buffering"] = "no"
-  
-  router.call(context)
-end
-
-server.bind_tcp("0.0.0.0", 3000, reuse_port: true)
-```
-
-### Límites y Throttling
-
-```crystal
-# Configurar límites
-MAX_CONNECTIONS = 10_000
-MAX_MESSAGE_SIZE = 64.kilobytes
-RATE_LIMIT = 100 # mensajes por segundo
-
-# Aplicar límites
-handler = Handler.new(
-  before_accept: ->(context : HTTP::Server::Context) {
-    return false if ConnectionManager.count >= MAX_CONNECTIONS
-    true
-  },
-  
-  on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
-    # Verificar tamaño del mensaje
-    if data.to_json.bytesize > MAX_MESSAGE_SIZE
-      socket.close(1009, "Message too large")
-      return
-    end
-    # Procesar mensaje...
-  }
-)
-```
-
-## Depuración
-
-### Modo Debug
-
-```crystal
-# Habilitar logging detallado
-Log.setup do |c|
-  backend = Log::IOBackend.new
-  c.bind "hauyna.websocket.*", :debug, backend
-end
-
-# Ejemplo de logs
-log.debug { "Nueva conexión WebSocket" }
-log.info { "Mensaje recibido: #{message}" }
-log.error { "Error al procesar mensaje: #{ex.message}" }
-```
-
-### Herramientas de Diagnóstico
-
-```crystal
-# Inspeccionar estado del sistema
-puts "Conexiones activas: #{ConnectionManager.count}"
-puts "Canales activos: #{Channel.list_channels}"
-puts "Usuarios online: #{Presence.count}"
-
-# Depurar conexión específica
-if socket = ConnectionManager.get_socket("user123")
-  puts "Canales suscritos: #{Channel.subscribed_channels(socket)}"
-  puts "Grupos: #{ConnectionManager.get_user_groups(socket)}"
-end
-```

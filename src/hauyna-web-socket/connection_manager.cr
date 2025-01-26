@@ -8,6 +8,7 @@ module Hauyna
         @@groups = {} of String => Set(String)
         @@mutex = Mutex.new
   
+        # Registra una nueva conexión con su identificador
         def self.register(socket : HTTP::WebSocket, identifier : String)
           @@mutex.synchronize do
             @@connections[identifier] = socket
@@ -15,6 +16,7 @@ module Hauyna
           end
         end
   
+        # Desregistra una conexión y limpia sus grupos asociados
         def self.unregister(socket : HTTP::WebSocket)
           @@mutex.synchronize do
             if identifier = @@socket_to_identifier[socket]?
@@ -28,12 +30,14 @@ module Hauyna
           end
         end
   
+        # Obtiene el socket asociado a un identificador
         def self.get_socket(identifier : String) : HTTP::WebSocket?
           @@mutex.synchronize do
             @@connections[identifier]
           end
         end
   
+        # Añade un usuario a un grupo específico
         def self.add_to_group(identifier : String, group_name : String)
           @@mutex.synchronize do
             @@groups[group_name] ||= Set(String).new

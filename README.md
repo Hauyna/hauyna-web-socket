@@ -2,8 +2,6 @@
 
 [![Crystal](https://img.shields.io/badge/Crystal-1.14.0-black?style=flat&logo=crystal&logoColor=white)](https://crystal-lang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/hauyna/hauyna-web-socket?include_prereleases&style=flat)](https://github.com/hauyna/hauyna-web-socket/releases)
-[![Build Status](https://github.com/hauyna/hauyna-web-socket/workflows/CI/badge.svg)](https://github.com/hauyna/hauyna-web-socket/actions)
 
 **Hauyna WebSocket** es una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona un conjunto completo de herramientas para gestionar conexiones WebSocket, canales, grupos, seguimiento de presencia, manejo de eventos y más.
 
@@ -754,7 +752,8 @@ end
 
 ## Autores
 
-Hauyna WebSocket es una librería creada y mantenida por:
+Hauyna WebSocket es una librería creada y mantenida por [José Antonio Padre García](https://github.com/Stockers-JAPG) y [Luis Antonio Padre García](https://github.com/LuisPadre25).
+Agradecemos tus comentarios, reportes de errores y sugerencias para seguir mejorando esta Libreria.
 
 <table>
   <tr>

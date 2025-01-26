@@ -43,7 +43,7 @@ server = HTTP::Server.new do |context|
   )
 
   router.websocket("/groupchat", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -121,4 +121,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

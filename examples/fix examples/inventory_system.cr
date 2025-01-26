@@ -5,7 +5,7 @@ require "http/server"
 
 class Product
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property category : String
@@ -15,13 +15,13 @@ class Product
   property location : String
   property last_updated : Time
   property status : String # in_stock, low_stock, out_of_stock
-  
+
   def initialize(@name : String, @category : String, @quantity : Int32, @min_stock : Int32, @price : Float64, @location : String)
     @id = Random::Secure.hex(8)
     @last_updated = Time.local
     @status = calculate_status
   end
-  
+
   def calculate_status : String
     if @quantity <= 0
       "out_of_stock"
@@ -35,7 +35,7 @@ end
 
 class Transaction
   include JSON::Serializable
-  
+
   property id : String
   property product_id : String
   property type : String # add, remove, adjust
@@ -43,7 +43,7 @@ class Transaction
   property user_id : String
   property timestamp : Time
   property notes : String?
-  
+
   def initialize(@product_id : String, @type : String, @quantity : Int32, @user_id : String, @notes : String? = nil)
     @id = Random::Secure.hex(8)
     @timestamp = Time.local
@@ -52,29 +52,29 @@ end
 
 class Inventory
   include JSON::Serializable
-  
+
   property products : Hash(String, Product)
   property transactions : Array(Transaction)
   property users : Hash(String, String) # user_id => name
   property alerts : Array(String)
-  
+
   def initialize
     @products = {} of String => Product
     @transactions = [] of Transaction
     @users = {} of String => String
     @alerts = [] of String
-    
+
     setup_demo_products
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
+
   def update_product(product_id : String, quantity : Int32, type : String, user_id : String, notes : String? = nil) : Bool
     if product = @products[product_id]?
       old_quantity = product.quantity
-      
+
       case type
       when "add"
         product.quantity += quantity
@@ -86,10 +86,10 @@ class Inventory
       else
         return false
       end
-      
+
       product.status = product.calculate_status
       product.last_updated = Time.local
-      
+
       transaction = Transaction.new(
         product_id: product_id,
         type: type,
@@ -97,16 +97,16 @@ class Inventory
         user_id: user_id,
         notes: notes
       )
-      
+
       @transactions << transaction
-      
+
       check_alerts(product)
       true
     else
       false
     end
   end
-  
+
   private def check_alerts(product : Product)
     if product.quantity <= 0
       add_alert("#{product.name} está agotado")
@@ -114,46 +114,46 @@ class Inventory
       add_alert("#{product.name} está por debajo del stock mínimo (#{product.quantity} unidades)")
     end
   end
-  
+
   private def add_alert(message : String)
     @alerts << "[#{Time.local}] #{message}"
     @alerts = @alerts.last(50) # Mantener solo las últimas 50 alertas
   end
-  
+
   private def setup_demo_products
     [
       {
-        name: "Laptop Dell XPS",
-        category: "Electrónicos",
-        quantity: 15,
+        name:      "Laptop Dell XPS",
+        category:  "Electrónicos",
+        quantity:  15,
         min_stock: 5,
-        price: 1299.99,
-        location: "A-123"
+        price:     1299.99,
+        location:  "A-123",
       },
       {
-        name: "Monitor LG 27\"",
-        category: "Electrónicos",
-        quantity: 8,
+        name:      "Monitor LG 27\"",
+        category:  "Electrónicos",
+        quantity:  8,
         min_stock: 3,
-        price: 299.99,
-        location: "A-124"
+        price:     299.99,
+        location:  "A-124",
       },
       {
-        name: "Teclado Mecánico",
-        category: "Accesorios",
-        quantity: 25,
+        name:      "Teclado Mecánico",
+        category:  "Accesorios",
+        quantity:  25,
         min_stock: 10,
-        price: 89.99,
-        location: "B-101"
+        price:     89.99,
+        location:  "B-101",
       },
       {
-        name: "Mouse Inalámbrico",
-        category: "Accesorios",
-        quantity: 30,
+        name:      "Mouse Inalámbrico",
+        category:  "Accesorios",
+        quantity:  30,
         min_stock: 15,
-        price: 39.99,
-        location: "B-102"
-      }
+        price:     39.99,
+        location:  "B-102",
+      },
     ].each do |p|
       product = Product.new(
         name: p[:name],
@@ -183,10 +183,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         inventory.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-        
+
         socket.send({
-          type: "init",
-          inventory: inventory
+          type:      "init",
+          inventory: inventory,
         }.to_json)
       end
     end
@@ -199,29 +199,29 @@ server = HTTP::Server.new do |context|
         case data["type"]?.try(&.as_s)
         when "update_product"
           if inventory.update_product(
-            data["product_id"].as_s,
-            data["quantity"].as_i,
-            data["action"].as_s,
-            user_id,
-            data["notes"]?.try(&.as_s)
-          )
+               data["product_id"].as_s,
+               data["quantity"].as_i,
+               data["action"].as_s,
+               user_id,
+               data["notes"]?.try(&.as_s)
+             )
             Hauyna::WebSocket::Events.send_to_group("users", {
-              type: "inventory_update",
-              inventory: inventory
+              type:      "inventory_update",
+              inventory: inventory,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/inventory", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -369,7 +369,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('inventory-system').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/inventory?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/inventory?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -407,24 +407,24 @@ server = HTTP::Server.new do |context|
               // Actualizar productos
               const productsDiv = document.getElementById('products');
               productsDiv.innerHTML = Object.values(inventory.products)
-                .map(product => \`
+                .map(product => `
                   <div class="product-card">
                     <div class="product-header">
-                      <h3>\${product.name}</h3>
-                      <span class="product-status \${product.status}">
-                        \${product.status.replace('_', ' ')}
+                      <h3>${product.name}</h3>
+                      <span class="product-status ${product.status}">
+                        ${product.status.replace('_', ' ')}
                       </span>
                     </div>
-                    <div>Categoría: \${product.category}</div>
-                    <div>Cantidad: \${product.quantity}</div>
-                    <div>Stock Mínimo: \${product.min_stock}</div>
-                    <div>Precio: $\${product.price.toFixed(2)}</div>
-                    <div>Ubicación: \${product.location}</div>
-                    <button onclick="openUpdateModal('\${product.id}')">
+                    <div>Categoría: ${product.category}</div>
+                    <div>Cantidad: ${product.quantity}</div>
+                    <div>Stock Mínimo: ${product.min_stock}</div>
+                    <div>Precio: $${product.price.toFixed(2)}</div>
+                    <div>Ubicación: ${product.location}</div>
+                    <button onclick="openUpdateModal('${product.id}')">
                       Actualizar Stock
                     </button>
                   </div>
-                \`).join('');
+                `).join('');
               
               // Actualizar transacciones
               const transactionsDiv = document.getElementById('transactions');
@@ -432,24 +432,24 @@ server = HTTP::Server.new do |context|
                 .slice().reverse()
                 .map(t => {
                   const product = inventory.products[t.product_id];
-                  return \`
+                  return `
                     <div class="transaction">
-                      [\${new Date(t.timestamp).toLocaleString()}]
-                      \${inventory.users[t.user_id]} 
-                      \${t.type === 'add' ? 'agregó' : t.type === 'remove' ? 'removió' : 'ajustó'}
-                      \${t.quantity} unidades de \${product.name}
-                      \${t.notes ? \`(\${t.notes})\` : ''}
+                      [${new Date(t.timestamp).toLocaleString()}]
+                      ${inventory.users[t.user_id]} 
+                      ${t.type === 'add' ? 'agregó' : t.type === 'remove' ? 'removió' : 'ajustó'}
+                      ${t.quantity} unidades de ${product.name}
+                      ${t.notes ? `(${t.notes})` : ''}
                     </div>
-                  \`;
+                  `;
                 }).join('');
               
               // Actualizar alertas
               const alertsDiv = document.getElementById('alerts');
               alertsDiv.innerHTML = inventory.alerts
                 .slice().reverse()
-                .map(alert => \`
-                  <div class="alert">\${alert}</div>
-                \`).join('');
+                .map(alert => `
+                  <div class="alert">${alert}</div>
+                `).join('');
             }
             
             function handleMessage(event) {
@@ -475,4 +475,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

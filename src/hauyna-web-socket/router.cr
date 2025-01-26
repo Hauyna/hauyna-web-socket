@@ -18,10 +18,9 @@ module Hauyna
         response = context.response
 
         if handler = match_route(request.path)
-          
           if upgrade_websocket?(request)
             params = extract_params(request)
-            
+
             ws_handler = HTTP::WebSocketHandler.new do |ws, ctx|
               handler.call(ws, params)
             end

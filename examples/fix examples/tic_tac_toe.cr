@@ -5,7 +5,7 @@ require "http/server"
 
 class TicTacToeGame
   include JSON::Serializable
-  
+
   property board : Array(String)
   property current_player : String
   property players : Hash(String, String) # player_id => X/O
@@ -22,7 +22,7 @@ class TicTacToeGame
     return false if position < 0 || position > 8
     return false if @board[position] != ""
     return false if @players[player]? != @current_player
-    
+
     @board[position] = @current_player
     @current_player = @current_player == "X" ? "O" : "X"
     true
@@ -88,14 +88,14 @@ server = HTTP::Server.new do |context|
         begin
           data = JSON.parse(message)
           position = data["position"].as_i
-          
+
           if game.make_move(position, player_id)
             if winner = game.check_winner
               game.status = "finished"
               winner_message = winner == "draw" ? "Empate!" : "Ganador: #{winner}"
               response = {
-                game: game,
-                winner: winner_message
+                game:   game,
+                winner: winner_message,
               }
               Hauyna::WebSocket::Events.broadcast(response.to_json)
             else
@@ -120,7 +120,7 @@ server = HTTP::Server.new do |context|
   )
 
   router.websocket("/game", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -209,7 +209,7 @@ server = HTTP::Server.new do |context|
                 if (!myMark) {
                   myMark = game.players[playerId];
                 }
-                status.textContent = \`Tu marca: \${myMark} | Turno: \${game.current_player}\`;
+                status.textContent = `Tu marca: ${myMark} | Turno: ${game.current_player}`;
               }
 
               updateBoard(game);
@@ -222,4 +222,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

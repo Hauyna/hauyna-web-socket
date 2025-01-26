@@ -5,15 +5,15 @@ require "http/server"
 
 class Poll
   include JSON::Serializable
-  
+
   property title : String
   property options : Hash(String, Int32)
   property voters : Hash(String, String) # user_id => option
-  property status : String # active, closed
+  property status : String               # active, closed
   property created_at : Time
   property end_time : Time?
   property percentages : Hash(String, Float64)
-  
+
   def initialize(@title : String, options : Array(String))
     @options = options.to_h { |opt| {opt, 0} }
     @voters = {} of String => String
@@ -23,45 +23,45 @@ class Poll
     @percentages = {} of String => Float64
     update_percentages
   end
-  
+
   def vote(user_id : String, option : String) : Bool
     return false unless @status == "active"
     return false unless @options.has_key?(option)
-    
+
     if previous = @voters[user_id]?
       @options[previous] -= 1
     end
-    
+
     @options[option] += 1
     @voters[user_id] = option
-    
+
     update_percentages
-    
+
     true
   end
-  
+
   private def update_percentages
     total = total_votes
     @percentages = @options.transform_values { |votes|
       total > 0 ? (votes * 100.0 / total) : 0.0
     }
   end
-  
+
   def close
     @status = "closed"
     @end_time = Time.local
   end
-  
+
   def total_votes : Int32
     @options.values.sum
   end
-  
+
   def percentage(option : String) : Float64
     total = total_votes
     return 0.0 if total == 0
     (@options[option] * 100.0) / total
   end
-  
+
   def to_json(json : JSON::Builder)
     json.object do
       json.field "title", @title
@@ -93,11 +93,11 @@ server = HTTP::Server.new do |context|
   handler.on_open = ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
     if user_id = params["user_id"]?.try(&.as_s)
       Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "voters")
-      
+
       socket.send({
-        type: "init",
-        poll: poll,
-        your_vote: poll.voters[user_id]?
+        type:      "init",
+        poll:      poll,
+        your_vote: poll.voters[user_id]?,
       }.to_json)
     end
   }
@@ -112,7 +112,7 @@ server = HTTP::Server.new do |context|
             if poll.vote(user_id, option)
               Hauyna::WebSocket::Events.send_to_group("voters", {
                 type: "poll_update",
-                poll: poll
+                poll: poll,
               }.to_json)
             end
           end
@@ -120,20 +120,20 @@ server = HTTP::Server.new do |context|
           poll.close
           Hauyna::WebSocket::Events.send_to_group("voters", {
             type: "poll_closed",
-            poll: poll
+            poll: poll,
           }.to_json)
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/vote", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -213,7 +213,7 @@ server = HTTP::Server.new do |context|
 
           <script>
             const userId = Math.random().toString(36).substr(2, 9);
-            const ws = new WebSocket(\`ws://localhost:8080/vote?user_id=\${userId}\`);
+            const ws = new WebSocket(`ws://localhost:8080/vote?user_id=${userId}`);
             let chart;
             let poll;
             
@@ -319,14 +319,14 @@ server = HTTP::Server.new do |context|
               options.innerHTML = Object.entries(poll.options)
                 .map(([option, votes]) => {
                   const percentage = poll.percentages[option];
-                  return \`
-                    <div class="option \${option === yourVote ? 'selected' : ''}"
-                         onclick="vote('\${option}')"
-                         \${poll.status === 'closed' ? 'style="pointer-events: none"' : ''}>
-                      \${option}<br>
-                      <strong>\${votes} votos (\${percentage.toFixed(1)}%)</strong>
+                  return `
+                    <div class="option ${option === yourVote ? 'selected' : ''}"
+                         onclick="vote('${option}')"
+                         ${poll.status === 'closed' ? 'style="pointer-events: none"' : ''}>
+                      ${option}<br>
+                      <strong>${votes} votos (${percentage.toFixed(1)}%)</strong>
                     </div>
-                  \`;
+                  `;
                 }).join('');
               
               if (chart) {
@@ -381,4 +381,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

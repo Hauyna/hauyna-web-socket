@@ -5,7 +5,7 @@ require "http/server"
 
 class SystemMetric
   include JSON::Serializable
-  
+
   property timestamp : Time
   property cpu_usage : Float64
   property memory_used : Int64
@@ -15,7 +15,7 @@ class SystemMetric
   property network_rx : Int64
   property network_tx : Int64
   property processes : Array(ProcessInfo)
-  
+
   def initialize
     @timestamp = Time.local
     @cpu_usage = get_cpu_usage
@@ -27,40 +27,40 @@ class SystemMetric
     @network_tx = get_network_tx
     @processes = get_top_processes
   end
-  
+
   private def get_cpu_usage : Float64
     # Simulación de datos para el ejemplo
     rand * 100
   end
-  
+
   private def get_memory_used : Int64
     # Simulación
     (rand * 16 * 1024 * 1024 * 1024).to_i64
   end
-  
+
   private def get_memory_total : Int64
     (16_i64 * 1024_i64 * 1024_i64 * 1024_i64) # 16GB como Int64
   end
-  
+
   private def get_disk_used : Int64
     # Simulación
     (rand * 512 * 1024 * 1024 * 1024).to_i64
   end
-  
+
   private def get_disk_total : Int64
     (512_i64 * 1024_i64 * 1024_i64 * 1024_i64) # 512GB como Int64
   end
-  
+
   private def get_network_rx : Int64
     # Simulación
     (rand * 1024 * 1024).to_i64
   end
-  
+
   private def get_network_tx : Int64
     # Simulación
     (rand * 1024 * 1024).to_i64
   end
-  
+
   private def get_top_processes : Array(ProcessInfo)
     # Simulación de procesos
     [
@@ -68,18 +68,18 @@ class SystemMetric
       ProcessInfo.new("vscode", rand * 15, rand * 1024),
       ProcessInfo.new("postgres", rand * 10, rand * 512),
       ProcessInfo.new("nginx", rand * 5, rand * 256),
-      ProcessInfo.new("crystal", rand * 8, rand * 512)
+      ProcessInfo.new("crystal", rand * 8, rand * 512),
     ]
   end
 end
 
 class ProcessInfo
   include JSON::Serializable
-  
+
   property name : String
   property cpu : Float64
   property memory : Float64
-  
+
   def initialize(@name : String, @cpu : Float64, @memory : Float64)
   end
 end
@@ -88,45 +88,45 @@ class Monitor
   property metrics : Array(SystemMetric)
   property alerts : Array(Alert)
   property users : Hash(String, String)
-  
+
   MAX_METRICS = 60
-  MAX_ALERTS = 10
-  
+  MAX_ALERTS  = 10
+
   def initialize
     @metrics = [] of SystemMetric
     @alerts = [] of Alert
     @users = {} of String => String
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
+
   def update_metrics
     metric = SystemMetric.new
     @metrics << metric
-    
+
     # Mantener solo las últimas MAX_METRICS mediciones
     if @metrics.size > MAX_METRICS
       @metrics = @metrics[-MAX_METRICS..]
     end
-    
+
     # Verificar alertas
     check_alerts(metric)
-    
+
     metric
   end
-  
+
   private def check_alerts(metric : SystemMetric)
     if metric.cpu_usage > 90
       @alerts << Alert.new("CPU", "Uso de CPU crítico: #{metric.cpu_usage.round(2)}%")
     end
-    
+
     memory_percent = (metric.memory_used.to_f / metric.memory_total) * 100
     if memory_percent > 90
       @alerts << Alert.new("Memory", "Memoria crítica: #{memory_percent.round(2)}%")
     end
-    
+
     # Mantener solo las últimas MAX_ALERTS alertas
     if @alerts.size > MAX_ALERTS
       @alerts = @alerts[-MAX_ALERTS..]
@@ -136,11 +136,11 @@ end
 
 class Alert
   include JSON::Serializable
-  
+
   property type : String
   property message : String
   property timestamp : Time
-  
+
   def initialize(@type : String, @message : String)
     @timestamp = Time.local
   end
@@ -160,11 +160,11 @@ server = HTTP::Server.new do |context|
     if (user_id = params["user_id"]?.try(&.as_s)) && (name = params["name"]?.try(&.as_s))
       monitor.add_user(user_id, name)
       Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "monitors")
-      
+
       socket.send({
-        type: "init",
+        type:    "init",
         metrics: monitor.metrics[-60..] || monitor.metrics, # Usar || para manejar arrays pequeños
-        alerts: monitor.alerts[-10..] || monitor.alerts
+        alerts:  monitor.alerts[-10..] || monitor.alerts,
       }.to_json)
     end
   }
@@ -173,19 +173,19 @@ server = HTTP::Server.new do |context|
   spawn do
     loop do
       sleep 1.seconds
-      
+
       metric = monitor.update_metrics
-      
+
       Hauyna::WebSocket::Events.send_to_group("monitors", {
-        type: "metrics_update",
+        type:   "metrics_update",
         metric: metric,
-        alerts: monitor.alerts[-10..] || monitor.alerts
+        alerts: monitor.alerts[-10..] || monitor.alerts,
       }.to_json)
     end
   end
 
   router.websocket("/monitor", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -315,7 +315,7 @@ server = HTTP::Server.new do |context|
                 unit++;
               }
               
-              return \`\${size.toFixed(2)} \${units[unit]}\`;
+              return `${size.toFixed(2)} ${units[unit]}`;
             }
             
             function createChart(ctx, label) {
@@ -384,23 +384,23 @@ server = HTTP::Server.new do |context|
               const processesDiv = document.getElementById('processes');
               processesDiv.innerHTML = processes
                 .sort((a, b) => b.cpu - a.cpu)
-                .map(process => \`
+                .map(process => `
                   <div class="process">
-                    <div>\${process.name}</div>
-                    <div>\${process.cpu.toFixed(1)}%</div>
-                    <div>\${process.memory.toFixed(0)} MB</div>
+                    <div>${process.name}</div>
+                    <div>${process.cpu.toFixed(1)}%</div>
+                    <div>${process.memory.toFixed(0)} MB</div>
                   </div>
-                \`).join('');
+                `).join('');
             }
             
             function updateAlerts(alerts) {
               const alertsDiv = document.getElementById('alerts');
-              alertsDiv.innerHTML = alerts.map(alert => \`
+              alertsDiv.innerHTML = alerts.map(alert => `
                 <div class="alert">
-                  [\${new Date(alert.timestamp).toLocaleTimeString()}]
-                  \${alert.type}: \${alert.message}
+                  [${new Date(alert.timestamp).toLocaleTimeString()}]
+                  ${alert.type}: ${alert.message}
                 </div>
-              \`).join('');
+              `).join('');
             }
             
             function handleMessage(event) {
@@ -464,7 +464,7 @@ server = HTTP::Server.new do |context|
               );
               
               ws = new WebSocket(
-                \`ws://localhost:8080/monitor?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/monitor?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -477,4 +477,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

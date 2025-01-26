@@ -3,7 +3,7 @@ module Hauyna
     class Heartbeat
       property interval : Time::Span
       property timeout : Time::Span
-      
+
       def initialize(@interval = 30.seconds, @timeout = 60.seconds)
         @last_pong = {} of HTTP::WebSocket => Time
       end
@@ -12,7 +12,7 @@ module Hauyna
         spawn do
           loop do
             sleep @interval
-            
+
             # Enviar ping
             begin
               socket.ping
@@ -44,4 +44,4 @@ module Hauyna
       end
     end
   end
-end 
+end

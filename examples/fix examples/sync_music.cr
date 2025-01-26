@@ -5,27 +5,27 @@ require "http/server"
 
 class Track
   include JSON::Serializable
-  
+
   property id : String
   property title : String
   property artist : String
   property url : String
   property duration : Int32
-  
+
   def initialize(@id, @title, @artist, @url, @duration)
   end
 end
 
 class Room
   include JSON::Serializable
-  
+
   property playlist : Array(Track)
   property current_track : Int32
   property is_playing : Bool
   property current_time : Float64
   property last_update : Time
   property listeners : Set(String)
-  
+
   def initialize
     @playlist = [] of Track
     @current_track = 0
@@ -34,27 +34,27 @@ class Room
     @last_update = Time.local
     @listeners = Set(String).new
   end
-  
+
   def add_track(track : Track)
     @playlist << track
   end
-  
+
   def play
     @is_playing = true
     @last_update = Time.local
   end
-  
+
   def pause
     @is_playing = false
     @last_update = Time.local
   end
-  
+
   def next_track
     @current_track = (@current_track + 1) % @playlist.size
     @current_time = 0.0
     @last_update = Time.local
   end
-  
+
   def current_position : Float64
     if @is_playing
       @current_time + (Time.local - @last_update).total_seconds
@@ -93,10 +93,10 @@ server = HTTP::Server.new do |context|
     if listener_id = params["listener_id"]?.try(&.as_s)
       room.listeners.add(listener_id)
       Hauyna::WebSocket::ConnectionManager.add_to_group(listener_id, "listeners")
-      
+
       socket.send({
         type: "init",
-        room: room
+        room: room,
       }.to_json)
     end
   }
@@ -118,15 +118,15 @@ server = HTTP::Server.new do |context|
             room.last_update = Time.local
           end
         end
-        
+
         Hauyna::WebSocket::Events.send_to_group("listeners", {
           type: "room_update",
-          room: room
+          room: room,
         }.to_json)
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
@@ -139,21 +139,21 @@ server = HTTP::Server.new do |context|
       if room.is_playing
         current_position = room.current_position
         current_track = room.playlist[room.current_track]
-        
+
         if current_position >= current_track.duration
           room.next_track
         end
-        
+
         Hauyna::WebSocket::Events.send_to_group("listeners", {
-          type: "time_update",
-          position: room.current_position
+          type:     "time_update",
+          position: room.current_position,
         }.to_json)
       end
     end
   end
 
   router.websocket("/music", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -233,13 +233,13 @@ server = HTTP::Server.new do |context|
 
           <script>
             const listenerId = Math.random().toString(36).substr(2, 9);
-            const ws = new WebSocket(\`ws://localhost:8080/music?listener_id=\${listenerId}\`);
+            const ws = new WebSocket(`ws://localhost:8080/music?listener_id=${listenerId}`);
             let room;
             
             function formatTime(seconds) {
               const mins = Math.floor(seconds / 60);
               const secs = Math.floor(seconds % 60);
-              return \`\${mins}:\${secs.toString().padStart(2, '0')}\`;
+              return `${mins}:${secs.toString().padStart(2, '0')}`;
             }
 
             function updatePlayer() {
@@ -251,19 +251,19 @@ server = HTTP::Server.new do |context|
               
               const playlist = document.getElementById('playlist');
               playlist.innerHTML = room.playlist
-                .map((track, index) => \`
-                  <div class="track \${index === room.current_track ? 'current' : ''}">
-                    \${track.title} - \${track.artist}
+                .map((track, index) => `
+                  <div class="track ${index === room.current_track ? 'current' : ''}">
+                    ${track.title} - ${track.artist}
                   </div>
-                \`).join('');
+                `).join('');
             }
 
             function updateProgress(position) {
               const track = room.playlist[room.current_track];
               const progress = (position / track.duration) * 100;
-              document.getElementById('progress-bar').style.width = \`\${progress}%\`;
+              document.getElementById('progress-bar').style.width = `${progress}%`;
               document.getElementById('time').textContent = 
-                \`\${formatTime(position)} / \${formatTime(track.duration)}\`;
+                `${formatTime(position)} / ${formatTime(track.duration)}`;
             }
 
             function togglePlay() {
@@ -322,4 +322,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

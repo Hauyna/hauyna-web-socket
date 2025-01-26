@@ -5,7 +5,7 @@ require "http/server"
 
 class Location
   include JSON::Serializable
-  
+
   property user_id : String
   property lat : Float64
   property lng : Float64
@@ -29,8 +29,8 @@ server = HTTP::Server.new do |context|
       group = params["group"]?.try(&.as_s) || "default"
       Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, group)
       Hauyna::WebSocket::Events.send_to_group(group, {
-        type: "user_connected",
-        user_id: user_id
+        type:    "user_connected",
+        user_id: user_id,
       }.to_json)
     end
   }
@@ -43,24 +43,24 @@ server = HTTP::Server.new do |context|
           lat = data["lat"].as_f
           lng = data["lng"].as_f
           group = data["group"]?.try(&.as_s) || "default"
-          
+
           location = Location.new(user_id, lat, lng)
           Hauyna::WebSocket::Events.send_to_group(group, {
-            type: "location_update",
-            location: location
+            type:     "location_update",
+            location: location,
           }.to_json)
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/track", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -108,7 +108,7 @@ server = HTTP::Server.new do |context|
             }).addTo(map);
 
             function connectWebSocket() {
-              const ws = new WebSocket(\`ws://localhost:8080/track?user_id=\${userId}&group=\${currentGroup}\`);
+              const ws = new WebSocket(`ws://localhost:8080/track?user_id=${userId}&group=${currentGroup}`);
               
               ws.onopen = () => {
                 document.getElementById('status').textContent = 'Conectado';
@@ -132,11 +132,11 @@ server = HTTP::Server.new do |context|
                 markers[location.user_id].setLatLng([location.lat, location.lng]);
               } else {
                 markers[location.user_id] = L.marker([location.lat, location.lng])
-                  .bindPopup(\`Usuario: \${location.user_id}<br>Última actualización: \${location.timestamp}\`)
+                  .bindPopup(`Usuario: ${location.user_id}<br>Última actualización: ${location.timestamp}`)
                   .addTo(map);
               }
               markers[location.user_id].getPopup().setContent(
-                \`Usuario: \${location.user_id}<br>Última actualización: \${location.timestamp}\`
+                `Usuario: ${location.user_id}<br>Última actualización: ${location.timestamp}`
               );
             }
 
@@ -173,4 +173,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

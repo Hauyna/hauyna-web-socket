@@ -5,15 +5,15 @@ require "http/server"
 
 class Game
   include JSON::Serializable
-  
+
   WORDS = ["gato", "perro", "casa", "árbol", "sol", "luna", "coche", "flor", "libro", "computadora"]
-  
+
   property current_word : String
   property drawer_id : String?
   property players : Hash(String, Int32) # player_id => score
-  property state : String # waiting, playing, round_end
+  property state : String                # waiting, playing, round_end
   property time_left : Int32
-  
+
   def initialize
     @current_word = ""
     @drawer_id = nil
@@ -21,24 +21,24 @@ class Game
     @state = "waiting"
     @time_left = 60
   end
-  
+
   def start_round(drawer : String)
     @drawer_id = drawer
     @current_word = WORDS.sample
     @state = "playing"
     @time_left = 60
   end
-  
+
   def clear_round
     @current_word = ""
     @state = "round_end"
     @time_left = 0
   end
-  
+
   def add_player(id : String)
     @players[id] = 0 unless @players[id]?
   end
-  
+
   def score_guess(player_id : String)
     @players[player_id] += (@time_left > 30 ? 3 : 1) if @players[player_id]?
   end
@@ -50,26 +50,26 @@ game = Game.new
 spawn do
   loop do
     start_time = Time.monotonic
-    
+
     if game.state == "playing" && game.time_left > 0
       game.time_left -= 1
-      
+
       if game.time_left == 0
         game.clear_round
         Hauyna::WebSocket::Events.send_to_group("players", {
-          type: "time_up",
-          word: game.current_word,
-          game: game,
-          clear: true
+          type:  "time_up",
+          word:  game.current_word,
+          game:  game,
+          clear: true,
         }.to_json)
       else
         Hauyna::WebSocket::Events.send_to_group("players", {
           type: "tick",
-          time: game.time_left
+          time: game.time_left,
         }.to_json)
       end
     end
-    
+
     elapsed = Time.monotonic - start_time
     sleep_time = 1.second - elapsed
     sleep sleep_time if sleep_time > Time::Span.zero
@@ -88,15 +88,15 @@ server = HTTP::Server.new do |context|
     if player_id = params["player_id"]?.try(&.as_s)
       game.add_player(player_id)
       Hauyna::WebSocket::ConnectionManager.add_to_group(player_id, "players")
-      
+
       # Si no hay dibujante, asignar uno
       if game.drawer_id.nil? && game.state == "waiting"
         game.start_round(player_id)
       end
-      
+
       Hauyna::WebSocket::Events.send_to_group("players", {
         type: "game_update",
-        game: game
+        game: game,
       }.to_json)
     end
   }
@@ -109,8 +109,8 @@ server = HTTP::Server.new do |context|
         when "draw"
           if player_id == game.drawer_id
             Hauyna::WebSocket::Events.send_to_group("players", {
-              type: "draw_update",
-              lines: data["lines"]
+              type:  "draw_update",
+              lines: data["lines"],
             }.to_json)
           end
         when "guess"
@@ -120,10 +120,10 @@ server = HTTP::Server.new do |context|
               game.score_guess(player_id)
               game.state = "round_end"
               Hauyna::WebSocket::Events.send_to_group("players", {
-                type: "correct_guess",
+                type:   "correct_guess",
                 winner: player_id,
-                word: game.current_word,
-                game: game
+                word:   game.current_word,
+                game:   game,
               }.to_json)
             end
           end
@@ -136,21 +136,21 @@ server = HTTP::Server.new do |context|
             game.start_round(next_drawer)
             Hauyna::WebSocket::Events.send_to_group("players", {
               type: "game_update",
-              game: game
+              game: game,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/pictionary", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -210,7 +210,7 @@ server = HTTP::Server.new do |context|
 
           <script>
             const playerId = Math.random().toString(36).substr(2, 9);
-            const ws = new WebSocket(\`ws://localhost:8080/pictionary?player_id=\${playerId}\`);
+            const ws = new WebSocket(`ws://localhost:8080/pictionary?player_id=${playerId}`);
             const canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
             const guess = document.getElementById('guess');
@@ -288,11 +288,11 @@ server = HTTP::Server.new do |context|
             function updatePlayers(game) {
               const playersList = document.getElementById('players');
               playersList.innerHTML = Object.entries(game.players)
-                .map(([id, score]) => \`
-                  <div>\${id === playerId ? 'Tú' : id} (\${score} puntos)
-                    \${id === game.drawer_id ? ' - Dibujante' : ''}
+                .map(([id, score]) => `
+                  <div>${id === playerId ? 'Tú' : id} (${score} puntos)
+                    ${id === game.drawer_id ? ' - Dibujante' : ''}
                   </div>
-                \`).join('');
+                `).join('');
             }
 
             let lastTick = Date.now();
@@ -305,7 +305,7 @@ server = HTTP::Server.new do |context|
                   isDrawer = data.game.drawer_id === playerId;
                   guess.style.display = isDrawer ? 'none' : 'block';
                   document.getElementById('word').textContent = isDrawer ? 
-                    \`Dibuja: \${data.game.current_word}\` : 
+                    `Dibuja: ${data.game.current_word}` : 
                     'Adivina la palabra';
                   updatePlayers(data.game);
                   clearCanvas(); // Limpiar canvas al iniciar nueva ronda
@@ -323,7 +323,7 @@ server = HTTP::Server.new do |context|
                   
                 case 'correct_guess':
                   clearCanvas();
-                  addMessage(\`¡\${data.winner} adivinó la palabra "\${data.word}"!\`);
+                  addMessage(`¡${data.winner} adivinó la palabra "${data.word}"!`);
                   updatePlayers(data.game);
                   setTimeout(() => {
                     ws.send(JSON.stringify({ type: 'next_round' }));
@@ -332,7 +332,7 @@ server = HTTP::Server.new do |context|
                   
                 case 'time_up':
                   clearCanvas();
-                  addMessage(\`¡Se acabó el tiempo! La palabra era "\${data.word}"\`);
+                  addMessage(`¡Se acabó el tiempo! La palabra era "${data.word}"`);
                   updatePlayers(data.game);
                   setTimeout(() => {
                     ws.send(JSON.stringify({ type: 'next_round' }));
@@ -342,7 +342,7 @@ server = HTTP::Server.new do |context|
                 case 'tick':
                   const now = Date.now();
                   if (now - lastTick >= 900) { // Asegurar que han pasado al menos 0.9 segundos
-                    document.getElementById('timer').textContent = \`Tiempo: \${data.time}s\`;
+                    document.getElementById('timer').textContent = `Tiempo: ${data.time}s`;
                     lastTick = now;
                   }
                   break;
@@ -356,4 +356,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

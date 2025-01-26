@@ -14,7 +14,7 @@ module Hauyna
       property on_close : Proc(HTTP::WebSocket, Nil)?
       property on_ping : Proc(HTTP::WebSocket, String, Nil)?
       property on_pong : Proc(HTTP::WebSocket, String, Nil)?
-      property extract_identifier : Proc(HTTP::WebSocket, JSON::Any, String?)?
+      property extract_identifier : Proc(HTTP::WebSocket, JSON::Any, String)?
       property heartbeat : Heartbeat?
 
       def initialize(
@@ -25,7 +25,7 @@ module Hauyna
         @on_pong = nil,
         @extract_identifier = nil,
         heartbeat_interval : Time::Span? = nil,
-        heartbeat_timeout : Time::Span? = nil
+        heartbeat_timeout : Time::Span? = nil,
       )
         if heartbeat_interval
           @heartbeat = Heartbeat.new(
@@ -37,16 +37,15 @@ module Hauyna
 
       def call(socket : HTTP::WebSocket, params : Hash(String, JSON::Any))
         json_params = JSON::Any.new(params)
-        
+
         if identifier_proc = @extract_identifier
-          identifier = identifier_proc.call(socket, json_params)
-          if identifier
-            ConnectionManager.register(socket, identifier)
-            
+          if identifier = identifier_proc.call(socket, json_params)
+            ConnectionManager.register(socket, identifier.not_nil!)
+
             # Auto-suscribir al canal principal si existe
             if default_channel = params["channel"]?.try(&.as_s)
-              Channel.subscribe(default_channel, socket, identifier, {
-                "user_id" => JSON::Any.new(identifier)
+              Channel.subscribe(default_channel, socket, identifier.not_nil!, {
+                "user_id" => JSON::Any.new(identifier),
               })
             end
           end
@@ -65,7 +64,7 @@ module Hauyna
             begin
               parsed_message = JSON.parse(message)
               MessageValidator.validate_message(parsed_message)
-              
+
               # Manejar mensajes específicos de canales
               case parsed_message["type"]?.try(&.as_s)
               when "subscribe_channel"
@@ -81,7 +80,16 @@ module Hauyna
               when "channel_message"
                 if channel = parsed_message["channel"]?.try(&.as_s)
                   if Channel.subscribed?(channel, socket)
-                    Channel.broadcast_to(channel, parsed_message["message"])
+                    # Convertir el mensaje a String o Hash según su tipo
+                    message = parsed_message["message"]
+                    case message
+                    when .as_s?
+                      Channel.broadcast_to(channel, message.as_s)
+                    when .as_h?
+                      Channel.broadcast_to(channel, message.as_h.transform_values { |v| v.as(JSON::Any) })
+                    else
+                      Channel.broadcast_to(channel, message.to_json)
+                    end
                   end
                 end
               else
@@ -120,7 +128,7 @@ module Hauyna
 
         if heartbeat = @heartbeat
           heartbeat.start(socket)
-          
+
           socket.on_pong do
             heartbeat.record_pong(socket)
           end

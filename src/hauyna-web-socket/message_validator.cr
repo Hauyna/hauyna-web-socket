@@ -5,7 +5,7 @@ module Hauyna
 
       def self.validate_message(message : JSON::Any)
         raise ValidationError.new("Mensaje vacío") if message.as_h?.try(&.empty?)
-        
+
         # Validar tipo de mensaje
         unless type = message["type"]?.try(&.as_s?)
           raise ValidationError.new("El mensaje debe tener un tipo")
@@ -47,4 +47,4 @@ module Hauyna
       end
     end
   end
-end 
+end

@@ -5,7 +5,7 @@ require "http/server"
 
 class Document
   include JSON::Serializable
-  
+
   property content : String
   property version : Int32
   property last_editor : String?
@@ -44,7 +44,7 @@ end
 
 class Operation
   include JSON::Serializable
-  
+
   property type : String # "insert" o "delete"
   property position : Int32
   property text : String
@@ -70,8 +70,8 @@ server = HTTP::Server.new do |context|
     if editor_id = params["editor_id"]?.try(&.as_s)
       Hauyna::WebSocket::ConnectionManager.add_to_group(editor_id, "editors")
       socket.send({
-        type: "init",
-        document: document
+        type:     "init",
+        document: document,
       }.to_json)
     end
   }
@@ -91,36 +91,36 @@ server = HTTP::Server.new do |context|
               editor: editor_id,
               version: operation_data["version"].as_i
             )
-            
+
             document.update(operation, editor_id)
-            
+
             Hauyna::WebSocket::Events.send_to_group("editors", {
-              type: "operation",
-              operation: operation
+              type:      "operation",
+              operation: operation,
             }.to_json)
           end
         when "cursor"
           if position = data["position"]?.try(&.as_i)
             document.update_cursor(editor_id, position)
-            
+
             Hauyna::WebSocket::Events.send_to_group("editors", {
-              type: "cursor_update",
-              editor: editor_id,
-              position: position
+              type:     "cursor_update",
+              editor:   editor_id,
+              position: position,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/edit", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -172,7 +172,7 @@ server = HTTP::Server.new do |context|
 
           <script>
             const editorId = Math.random().toString(36).substr(2, 9);
-            const ws = new WebSocket(\`ws://localhost:8080/edit?editor_id=\${editorId}\`);
+            const ws = new WebSocket(`ws://localhost:8080/edit?editor_id=${editorId}`);
             const editor = document.getElementById('editor');
             const status = document.getElementById('status');
             const version = document.getElementById('version');
@@ -284,9 +284,9 @@ server = HTTP::Server.new do |context|
                   isUpdating = true;
                   editor.value = data.document.content;
                   localVersion = data.document.version;
-                  version.textContent = \`Versión: \${data.document.version}\`;
+                  version.textContent = `Versión: ${data.document.version}`;
                   lastEditor.textContent = data.document.last_editor ? 
-                    \`Último editor: \${data.document.last_editor}\` : '';
+                    `Último editor: ${data.document.last_editor}` : '';
                   isUpdating = false;
                   break;
                   
@@ -294,8 +294,8 @@ server = HTTP::Server.new do |context|
                   if (data.operation.editor !== editorId) {
                     applyOperation(data.operation);
                     localVersion++;
-                    version.textContent = \`Versión: \${localVersion}\`;
-                    lastEditor.textContent = \`Último editor: \${data.operation.editor}\`;
+                    version.textContent = `Versión: ${localVersion}`;
+                    lastEditor.textContent = `Último editor: ${data.operation.editor}`;
                   }
                   break;
                   
@@ -312,4 +312,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

@@ -5,20 +5,20 @@ require "http/server"
 
 class Doctor
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property specialty : String
   property schedule : Array(TimeSlot)
   property status : String # available, busy, off
-  
+
   def initialize(@name : String, @specialty : String)
     @id = Random::Secure.hex(8)
     @schedule = [] of TimeSlot
     @status = "available"
     generate_schedule
   end
-  
+
   private def generate_schedule
     # Generar horarios para la próxima semana
     7.times do |day|
@@ -35,23 +35,23 @@ end
 
 class TimeSlot
   include JSON::Serializable
-  
+
   property id : String
   property start_time : Time
   property duration : Int32 # minutos
-  property status : String # available, booked, past
+  property status : String  # available, booked, past
   property appointment_id : String?
-  
+
   def initialize(@start_time : Time, @duration : Int32)
     @id = Random::Secure.hex(8)
     @status = "available"
     @appointment_id = nil
   end
-  
+
   def end_time : Time
     @start_time + @duration.minutes
   end
-  
+
   def update_status
     if Time.local > end_time
       @status = "past"
@@ -61,7 +61,7 @@ end
 
 class Appointment
   include JSON::Serializable
-  
+
   property id : String
   property doctor_id : String
   property patient_id : String
@@ -70,7 +70,7 @@ class Appointment
   property reason : String
   property status : String # confirmed, cancelled, completed
   property created_at : Time
-  
+
   def initialize(@doctor_id : String, @patient_id : String, @patient_name : String, @time_slot_id : String, @reason : String)
     @id = Random::Secure.hex(8)
     @status = "confirmed"
@@ -80,30 +80,30 @@ end
 
 class MedicalSystem
   include JSON::Serializable
-  
+
   property doctors : Hash(String, Doctor)
   property appointments : Hash(String, Appointment)
   property users : Hash(String, String) # user_id => name
   property notifications : Array(String)
-  
+
   def initialize
     @doctors = {} of String => Doctor
     @appointments = {} of String => Appointment
     @users = {} of String => String
     @notifications = [] of String
-    
+
     setup_demo_doctors
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
+
   def book_appointment(doctor_id : String, time_slot_id : String, patient_id : String, reason : String) : Bool
     if doctor = @doctors[doctor_id]?
       if time_slot = doctor.schedule.find { |ts| ts.id == time_slot_id }
         return false if time_slot.status != "available"
-        
+
         appointment = Appointment.new(
           doctor_id: doctor_id,
           patient_id: patient_id,
@@ -111,11 +111,11 @@ class MedicalSystem
           time_slot_id: time_slot_id,
           reason: reason
         )
-        
+
         time_slot.status = "booked"
         time_slot.appointment_id = appointment.id
         @appointments[appointment.id] = appointment
-        
+
         add_notification("Nueva cita: #{@users[patient_id]} con #{doctor.name} para #{time_slot.start_time.to_s("%d/%m/%Y %H:%M")}")
         true
       else
@@ -125,18 +125,18 @@ class MedicalSystem
       false
     end
   end
-  
+
   def cancel_appointment(appointment_id : String, user_id : String) : Bool
     if appointment = @appointments[appointment_id]?
       return false unless appointment.patient_id == user_id
       return false if appointment.status != "confirmed"
-      
+
       if doctor = @doctors[appointment.doctor_id]?
         if time_slot = doctor.schedule.find { |ts| ts.id == appointment.time_slot_id }
           time_slot.status = "available"
           time_slot.appointment_id = nil
           appointment.status = "cancelled"
-          
+
           add_notification("Cita cancelada: #{appointment.patient_name} con #{doctor.name} para #{time_slot.start_time.to_s("%d/%m/%Y %H:%M")}")
           true
         else
@@ -149,17 +149,17 @@ class MedicalSystem
       false
     end
   end
-  
+
   private def add_notification(message : String)
     @notifications << "[#{Time.local}] #{message}"
     @notifications = @notifications.last(50)
   end
-  
+
   private def setup_demo_doctors
     [
       {name: "Dr. García", specialty: "Medicina General"},
       {name: "Dra. Rodríguez", specialty: "Pediatría"},
-      {name: "Dr. López", specialty: "Cardiología"}
+      {name: "Dr. López", specialty: "Cardiología"},
     ].each do |d|
       doctor = Doctor.new(d[:name], d[:specialty])
       @doctors[doctor.id] = doctor
@@ -182,10 +182,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         system.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-        
+
         socket.send({
-          type: "init",
-          system: system
+          type:   "init",
+          system: system,
         }.to_json)
       end
     end
@@ -198,32 +198,31 @@ server = HTTP::Server.new do |context|
         case data["type"]?.try(&.as_s)
         when "book_appointment"
           if system.book_appointment(
-            data["doctor_id"].as_s,
-            data["time_slot_id"].as_s,
-            user_id,
-            data["reason"].as_s
-          )
+               data["doctor_id"].as_s,
+               data["time_slot_id"].as_s,
+               user_id,
+               data["reason"].as_s
+             )
             Hauyna::WebSocket::Events.send_to_group("users", {
-              type: "system_update",
-              system: system
+              type:   "system_update",
+              system: system,
             }.to_json)
           end
-          
         when "cancel_appointment"
           if system.cancel_appointment(
-            data["appointment_id"].as_s,
-            user_id
-          )
+               data["appointment_id"].as_s,
+               user_id
+             )
             Hauyna::WebSocket::Events.send_to_group("users", {
-              type: "system_update",
-              system: system
+              type:   "system_update",
+              system: system,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
@@ -233,20 +232,20 @@ server = HTTP::Server.new do |context|
   spawn do
     loop do
       sleep 1.minute
-      
+
       system.doctors.each_value do |doctor|
         doctor.schedule.each(&.update_status)
       end
-      
+
       Hauyna::WebSocket::Events.send_to_group("users", {
-        type: "system_update",
-        system: system
+        type:   "system_update",
+        system: system,
       }.to_json)
     end
   end
 
   router.websocket("/medical", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -390,7 +389,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('medical-system').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/medical?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/medical?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -406,7 +405,7 @@ server = HTTP::Server.new do |context|
               selectedSlot = timeSlotId;
               
               document.getElementById('booking-info').textContent = 
-                \`\${doctor.name} - \${new Date(timeSlot.start_time).toLocaleString()}\`;
+                `${doctor.name} - ${new Date(timeSlot.start_time).toLocaleString()}`;
               document.getElementById('booking-modal').style.display = 'block';
             }
             
@@ -443,22 +442,22 @@ server = HTTP::Server.new do |context|
               // Actualizar doctores y horarios
               const doctorsDiv = document.getElementById('doctors');
               doctorsDiv.innerHTML = Object.values(system.doctors)
-                .map(doctor => \`
+                .map(doctor => `
                   <div class="doctor-card">
-                    <h3>\${doctor.name}</h3>
-                    <div>\${doctor.specialty}</div>
+                    <h3>${doctor.name}</h3>
+                    <div>${doctor.specialty}</div>
                     <div class="schedule">
-                      \${doctor.schedule
+                      ${doctor.schedule
                         .filter(ts => ts.status !== 'past')
-                        .map(timeSlot => \`
-                          <div class="time-slot \${timeSlot.status}"
-                               onclick="openBookingModal('\${doctor.id}', '\${timeSlot.id}')">
-                            \${new Date(timeSlot.start_time).toLocaleString()}
+                        .map(timeSlot => `
+                          <div class="time-slot ${timeSlot.status}"
+                               onclick="openBookingModal('${doctor.id}', '${timeSlot.id}')">
+                            ${new Date(timeSlot.start_time).toLocaleString()}
                           </div>
-                        \`).join('')}
+                        `).join('')}
                     </div>
                   </div>
-                \`).join('');
+                `).join('');
               
               // Actualizar mis citas
               const appointmentsDiv = document.getElementById('my-appointments');
@@ -469,25 +468,25 @@ server = HTTP::Server.new do |context|
                 .map(appointment => {
                   const doctor = system.doctors[appointment.doctor_id];
                   const timeSlot = doctor.schedule.find(ts => ts.id === appointment.time_slot_id);
-                  return \`
+                  return `
                     <div class="appointment">
-                      <div>Doctor: \${doctor.name}</div>
-                      <div>Fecha: \${new Date(timeSlot.start_time).toLocaleString()}</div>
-                      <div>Motivo: \${appointment.reason}</div>
-                      <button onclick="cancelAppointment('\${appointment.id}')">
+                      <div>Doctor: ${doctor.name}</div>
+                      <div>Fecha: ${new Date(timeSlot.start_time).toLocaleString()}</div>
+                      <div>Motivo: ${appointment.reason}</div>
+                      <button onclick="cancelAppointment('${appointment.id}')">
                         Cancelar
                       </button>
                     </div>
-                  \`;
+                  `;
                 }).join('');
               
               // Actualizar notificaciones
               const notificationsDiv = document.getElementById('notifications');
               notificationsDiv.innerHTML = system.notifications
                 .slice().reverse()
-                .map(notification => \`
-                  <div class="notification">\${notification}</div>
-                \`).join('');
+                .map(notification => `
+                  <div class="notification">${notification}</div>
+                `).join('');
             }
             
             function handleMessage(event) {
@@ -513,4 +512,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

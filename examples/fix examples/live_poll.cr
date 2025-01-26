@@ -5,21 +5,21 @@ require "http/server"
 
 class Poll
   include JSON::Serializable
-  
+
   property question : String
   property options : Hash(String, Int32)
   property voters : Set(String)
-  
+
   def initialize(@question : String, options : Array(String))
     @options = Hash(String, Int32).new(0)
     options.each { |opt| @options[opt] = 0 }
     @voters = Set(String).new
   end
-  
+
   def vote(option : String, voter_id : String) : Bool
     return false if @voters.includes?(voter_id)
     return false unless @options.has_key?(option)
-    
+
     @options[option] += 1
     @voters.add(voter_id)
     true
@@ -46,7 +46,7 @@ server = HTTP::Server.new do |context|
       Hauyna::WebSocket::ConnectionManager.add_to_group(voter_id, "voters")
       socket.send({
         type: "poll_data",
-        poll: poll
+        poll: poll,
       }.to_json)
     end
   }
@@ -60,27 +60,27 @@ server = HTTP::Server.new do |context|
             if poll.vote(option, voter_id)
               Hauyna::WebSocket::Events.send_to_group("voters", {
                 type: "poll_update",
-                poll: poll
+                poll: poll,
               }.to_json)
             else
               socket.send({
-                type: "error",
-                message: "Ya has votado o la opción no es válida"
+                type:    "error",
+                message: "Ya has votado o la opción no es válida",
               }.to_json)
             end
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: "Error al procesar el voto: #{ex.message}"
+          type:    "error",
+          message: "Error al procesar el voto: #{ex.message}",
         }.to_json)
       end
     end
   }
 
   router.websocket("/poll", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -155,15 +155,15 @@ server = HTTP::Server.new do |context|
                 const percentage = totalVotes > 0 ? (votes / totalVotes * 100).toFixed(1) : 0;
                 const div = document.createElement('div');
                 div.className = 'option';
-                div.innerHTML = \`
+                div.innerHTML = `
                   <div>
-                    \${option}
-                    <span class="votes">\${votes} votos (\${percentage}%)</span>
+                    ${option}
+                    <span class="votes">${votes} votos (${percentage}%)</span>
                   </div>
                   <div class="progress-bar">
-                    <div class="progress" style="width: \${percentage}%"></div>
+                    <div class="progress" style="width: ${percentage}%"></div>
                   </div>
-                \`;
+                `;
                 
                 if (!hasVoted && !poll.voters.includes(voterId)) {
                   div.onclick = () => vote(option);
@@ -200,4 +200,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

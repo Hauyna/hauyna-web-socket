@@ -20,18 +20,20 @@ module Hauyna
           @@channels[channel] ||= Set(Subscription).new
           subscription = Subscription.new(socket, identifier, metadata)
           @@channels[channel].add(subscription)
-          
-          broadcast_to(channel, {
-            type: "channel_event",
-            event: "subscription_added",
-            channel: channel,
-            user: identifier,
-            metadata: metadata
-          })
+
+          event_message = {
+            "type"     => JSON::Any.new("channel_event"),
+            "event"    => JSON::Any.new("subscription_added"),
+            "channel"  => JSON::Any.new(channel),
+            "user"     => JSON::Any.new(identifier),
+            "metadata" => JSON::Any.new(metadata.to_json),
+          }
+
+          broadcast_to(channel, event_message)
 
           # Actualizar presencia si está habilitada
           Presence.track(identifier, metadata.merge({
-            "channel" => JSON::Any.new(channel)
+            "channel" => JSON::Any.new(channel),
           }))
         end
       end
@@ -44,12 +46,14 @@ module Hauyna
               channel_subs.delete(subscription)
               @@channels.delete(channel) if channel_subs.empty?
 
-              broadcast_to(channel, {
-                type: "channel_event",
-                event: "subscription_removed",
-                channel: channel,
-                user: subscription.identifier
-              })
+              event_message = {
+                "type"    => JSON::Any.new("channel_event"),
+                "event"   => JSON::Any.new("subscription_removed"),
+                "channel" => JSON::Any.new(channel),
+                "user"    => JSON::Any.new(subscription.identifier),
+              }
+
+              broadcast_to(channel, event_message)
 
               # Actualizar presencia
               Presence.untrack(subscription.identifier)
@@ -59,9 +63,9 @@ module Hauyna
       end
 
       # Envía mensaje a todos los suscriptores de un canal
-      def self.broadcast_to(channel : String, message : Hash | String)
-        message = message.to_json if message.is_a?(Hash)
-        
+      def self.broadcast_to(channel : String, message : Hash(String, JSON::Any) | String)
+        message = message.to_json if message.is_a?(Hash(String, JSON::Any))
+
         @@mutex.synchronize do
           if subs = @@channels[channel]?
             subs.each do |subscription|
@@ -87,25 +91,58 @@ module Hauyna
         end
       end
 
+      # Obtiene canales suscritos por un socket sin bloquear el mutex nuevamente
+      private def self.subscribed_channels_unsafe(socket : HTTP::WebSocket) : Array(String)
+        channels = [] of String
+        @@channels.each do |channel, subs|
+          if subs.any? { |s| s.socket == socket }
+            channels << channel
+          end
+        end
+        channels
+      end
+
       # Obtiene canales suscritos por un socket
       def self.subscribed_channels(socket : HTTP::WebSocket) : Array(String)
         @@mutex.synchronize do
-          channels = [] of String
-          @@channels.each do |channel, subs|
-            if subs.any? { |s| s.socket == socket }
-              channels << channel
-            end
-          end
-          channels
+          subscribed_channels_unsafe(socket)
         end
       end
 
       # Limpia todas las suscripciones de un socket
       def self.cleanup_socket(socket : HTTP::WebSocket)
         @@mutex.synchronize do
-          channels_to_cleanup = subscribed_channels(socket)
+          # Obtener los canales mientras tenemos el lock
+          channels_to_cleanup = subscribed_channels_unsafe(socket)
+
+          # Limpiar cada canal
           channels_to_cleanup.each do |channel|
-            unsubscribe(channel, socket)
+            if channel_subs = @@channels[channel]?
+              if subscription = channel_subs.find { |s| s.socket == socket }
+                channel_subs.delete(subscription)
+                @@channels.delete(channel) if channel_subs.empty?
+
+                # Notificar la desuscripción sin volver a bloquear el mutex
+                event_message = {
+                  "type"    => JSON::Any.new("channel_event"),
+                  "event"   => JSON::Any.new("subscription_removed"),
+                  "channel" => JSON::Any.new(channel),
+                  "user"    => JSON::Any.new(subscription.identifier),
+                }
+
+                # Enviar el mensaje directamente a los sockets restantes
+                channel_subs.each do |sub|
+                  begin
+                    sub.socket.send(event_message.to_json)
+                  rescue
+                    # Ignorar errores de envío durante la limpieza
+                  end
+                end
+
+                # Actualizar presencia
+                Presence.untrack(subscription.identifier)
+              end
+            end
           end
         end
       end
@@ -133,4 +170,4 @@ module Hauyna
       end
     end
   end
-end 
+end

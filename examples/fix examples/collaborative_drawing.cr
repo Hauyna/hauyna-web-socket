@@ -16,8 +16,8 @@ server = HTTP::Server.new do |context|
         room = params["room"]?.try(&.as_s) || "default"
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, room)
         Hauyna::WebSocket::Events.send_to_group(room, {
-          type: "user_joined",
-          user_id: user_id
+          type:    "user_joined",
+          user_id: user_id,
         }.to_json)
       end
     },
@@ -28,9 +28,9 @@ server = HTTP::Server.new do |context|
         room = data["room"]?.try(&.as_s) || "default"
         # Reenviar el trazo a todos los usuarios en la sala
         Hauyna::WebSocket::Events.send_to_group(room, {
-          type: "draw",
+          type:    "draw",
           user_id: user_id,
-          data: data
+          data:    data,
         }.to_json)
       end
     },
@@ -38,15 +38,15 @@ server = HTTP::Server.new do |context|
     on_close: ->(socket : HTTP::WebSocket) {
       if user_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
         Hauyna::WebSocket::Events.broadcast({
-          type: "user_left",
-          user_id: user_id
+          type:    "user_left",
+          user_id: user_id,
         }.to_json)
       end
     }
   )
 
   router.websocket("/draw", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -161,4 +161,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

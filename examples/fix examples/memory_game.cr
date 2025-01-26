@@ -5,12 +5,12 @@ require "http/server"
 
 class Card
   include JSON::Serializable
-  
+
   property id : Int32
   property value : String
   property revealed : Bool
   property matched : Bool
-  
+
   def initialize(@id : Int32, @value : String)
     @revealed = false
     @matched = false
@@ -19,12 +19,12 @@ end
 
 class Player
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property score : Int32
   property is_turn : Bool
-  
+
   def initialize(@id : String, @name : String)
     @score = 0
     @is_turn = false
@@ -33,22 +33,22 @@ end
 
 class Game
   include JSON::Serializable
-  
+
   EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯"]
-  
+
   property cards : Array(Card)
   property players : Hash(String, Player)
   property state : String # waiting, playing, finished
   property revealed_cards : Array(Card)
   property current_player : String?
-  
+
   def initialize
     @cards = [] of Card
     @players = {} of String => Player
     @state = "waiting"
     @revealed_cards = [] of Card
     @current_player = nil
-    
+
     # Crear cartas
     emojis = EMOJIS.first(6)
     id = 0
@@ -60,47 +60,47 @@ class Game
     end
     @cards.shuffle!
   end
-  
+
   def add_player(id : String, name : String)
     @players[id] = Player.new(id, name)
     if @players.size == 2
       start_game
     end
   end
-  
+
   def start_game
     @state = "playing"
     @current_player = @players.keys.first
     @players[@current_player.not_nil!].is_turn = true
   end
-  
+
   def reveal_card(card_id : Int32)
     return false unless @state == "playing"
     return false if @revealed_cards.size >= 2
-    
+
     if card = @cards.find { |c| c.id == card_id }
       return false if card.revealed || card.matched
-      
+
       card.revealed = true
       @revealed_cards << card
-      
+
       if @revealed_cards.size == 2
         check_match
       end
-      
+
       true
     else
       false
     end
   end
-  
+
   private def check_match
     if @revealed_cards[0].value == @revealed_cards[1].value
       @revealed_cards.each(&.matched = true)
       if current = @current_player
         @players[current].score += 1
       end
-      
+
       if @cards.all?(&.matched)
         @state = "finished"
       end
@@ -108,12 +108,12 @@ class Game
       next_turn
     end
   end
-  
+
   def hide_revealed
     @revealed_cards.each(&.revealed = false)
     @revealed_cards.clear
   end
-  
+
   private def next_turn
     if current = @current_player
       @players[current].is_turn = false
@@ -139,7 +139,7 @@ server = HTTP::Server.new do |context|
       if player_id = params["player_id"]?.try(&.as_s)
         name = params["name"]?.try(&.as_s) || "Jugador #{player_id}"
         game.add_player(player_id, name)
-        
+
         socket.send(JSON.build { |json|
           json.object do
             json.field "type", "game_update"
@@ -151,9 +151,8 @@ server = HTTP::Server.new do |context|
 
     on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
       if player_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
-        if data["type"]?.try(&.as_s) == "reveal" && 
+        if data["type"]?.try(&.as_s) == "reveal" &&
            (card_id = data["card_id"]?.try(&.as_i))
-          
           if game.reveal_card(card_id)
             socket.send(JSON.build { |json|
               json.object do
@@ -161,7 +160,7 @@ server = HTTP::Server.new do |context|
                 json.field "game", game
               end
             })
-            
+
             if game.revealed_cards.size == 2
               sleep 1.seconds
               game.hide_revealed
@@ -179,7 +178,7 @@ server = HTTP::Server.new do |context|
   )
 
   router.websocket("/memory", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -266,7 +265,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('game').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/memory?player_id=\${playerId}&name=\${name}\`
+                `ws://localhost:8080/memory?player_id=${playerId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -285,26 +284,26 @@ server = HTTP::Server.new do |context|
             
             function updateBoard() {
               const board = document.getElementById('board');
-              board.innerHTML = game.cards.map(card => \`
-                <div class="card \${card.revealed ? 'revealed' : ''} \${card.matched ? 'matched' : ''}"
-                     onclick="revealCard(\${card.id})">
-                  \${card.revealed || card.matched ? card.value : ''}
+              board.innerHTML = game.cards.map(card => `
+                <div class="card ${card.revealed ? 'revealed' : ''} ${card.matched ? 'matched' : ''}"
+                     onclick="revealCard(${card.id})">
+                  ${card.revealed || card.matched ? card.value : ''}
                 </div>
-              \`).join('');
+              `).join('');
               
               const players = document.getElementById('players');
-              players.innerHTML = Object.values(game.players).map(player => \`
-                <div class="player \${player.is_turn ? 'current' : ''}">
-                  <div>\${player.name}</div>
-                  <div>\${player.score} pares</div>
-                  \${player.is_turn ? '(Tu turno)' : ''}
+              players.innerHTML = Object.values(game.players).map(player => `
+                <div class="player ${player.is_turn ? 'current' : ''}">
+                  <div>${player.name}</div>
+                  <div>${player.score} pares</div>
+                  ${player.is_turn ? '(Tu turno)' : ''}
                 </div>
-              \`).join('');
+              `).join('');
               
               if (game.state === 'finished') {
                 const winner = Object.values(game.players)
                   .reduce((a, b) => a.score > b.score ? a : b);
-                alert(\`¡Juego terminado! Ganador: \${winner.name}\`);
+                alert(`¡Juego terminado! Ganador: ${winner.name}`);
               }
             }
             
@@ -330,4 +329,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

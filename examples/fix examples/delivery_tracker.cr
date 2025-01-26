@@ -5,13 +5,13 @@ require "http/server"
 
 class DeliveryPerson
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property status : String # available, delivering, offline
   property current_location : Location?
   property current_order_id : String?
-  
+
   def initialize(@name : String)
     @id = Random::Secure.hex(8)
     @status = "available"
@@ -22,11 +22,11 @@ end
 
 class Location
   include JSON::Serializable
-  
+
   property lat : Float64
   property lng : Float64
   property timestamp : Time
-  
+
   def initialize(@lat : Float64, @lng : Float64)
     @timestamp = Time.local
   end
@@ -34,7 +34,7 @@ end
 
 class Order
   include JSON::Serializable
-  
+
   property id : String
   property customer_id : String
   property customer_name : String
@@ -48,9 +48,9 @@ class Order
   property created_at : Time
   property estimated_time : Int32? # minutos
   property route_points : Array(Location)
-  
+
   def initialize(@customer_id : String, @customer_name : String, @items : Array(OrderItem),
-                @pickup_location : Location, @delivery_location : Location, @notes : String?)
+                 @pickup_location : Location, @delivery_location : Location, @notes : String?)
     @id = Random::Secure.hex(8)
     @status = "pending"
     @delivery_person_id = nil
@@ -59,7 +59,7 @@ class Order
     @route_points = [] of Location
     @total = calculate_total
   end
-  
+
   private def calculate_total : Float64
     @items.sum(&.subtotal)
   end
@@ -67,15 +67,15 @@ end
 
 class OrderItem
   include JSON::Serializable
-  
+
   property name : String
   property quantity : Int32
   property price : Float64
   property notes : String?
-  
+
   def initialize(@name : String, @quantity : Int32, @price : Float64, @notes : String? = nil)
   end
-  
+
   def subtotal : Float64
     @quantity * @price
   end
@@ -83,28 +83,28 @@ end
 
 class DeliverySystem
   include JSON::Serializable
-  
+
   property orders : Hash(String, Order)
   property delivery_people : Hash(String, DeliveryPerson)
   property users : Hash(String, String) # user_id => name
   property notifications : Array(String)
-  
+
   def initialize
     @orders = {} of String => Order
     @delivery_people = {} of String => DeliveryPerson
     @users = {} of String => String
     @notifications = [] of String
-    
+
     setup_demo_delivery_people
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
-  def create_order(customer_id : String, items : Array(OrderItem), 
-                  pickup_location : Location, delivery_location : Location, 
-                  notes : String?) : Order
+
+  def create_order(customer_id : String, items : Array(OrderItem),
+                   pickup_location : Location, delivery_location : Location,
+                   notes : String?) : Order
     order = Order.new(
       customer_id: customer_id,
       customer_name: @users[customer_id],
@@ -113,55 +113,55 @@ class DeliverySystem
       delivery_location: delivery_location,
       notes: notes
     )
-    
+
     @orders[order.id] = order
     add_notification("Nuevo pedido creado por #{order.customer_name}")
     order
   end
-  
+
   def assign_delivery_person(order_id : String, delivery_person_id : String) : Bool
     order = @orders[order_id]?
     delivery_person = @delivery_people[delivery_person_id]?
-    
+
     if order && delivery_person
       return false unless order.status == "pending"
       return false unless delivery_person.status == "available"
-      
+
       order.status = "assigned"
       order.delivery_person_id = delivery_person_id
       order.estimated_time = calculate_estimated_time(order)
-      
+
       delivery_person.status = "delivering"
       delivery_person.current_order_id = order_id
-      
+
       add_notification("#{delivery_person.name} asignado al pedido de #{order.customer_name}")
       true
     else
       false
     end
   end
-  
+
   def update_delivery_location(delivery_person_id : String, location : Location) : Bool
     if delivery_person = @delivery_people[delivery_person_id]?
       delivery_person.current_location = location
-      
+
       if order_id = delivery_person.current_order_id
         if order = @orders[order_id]?
           order.route_points << location
         end
       end
-      
+
       true
     else
       false
     end
   end
-  
+
   def update_order_status(order_id : String, status : String) : Bool
     if order = @orders[order_id]?
       old_status = order.status
       order.status = status
-      
+
       if status == "delivered" || status == "cancelled"
         if delivery_person = @delivery_people[order.delivery_person_id]?
           delivery_person.status = "available"
@@ -169,32 +169,32 @@ class DeliverySystem
           delivery_person.current_location = nil
         end
       end
-      
+
       add_notification("Pedido de #{order.customer_name} cambió de #{old_status} a #{status}")
       true
     else
       false
     end
   end
-  
+
   private def add_notification(message : String)
     @notifications << "[#{Time.local}] #{message}"
     @notifications = @notifications.last(50)
   end
-  
+
   private def calculate_estimated_time(order : Order) : Int32
     # Simulación simple de estimación
-    base_time = 30 # 30 minutos base
+    base_time = 30      # 30 minutos base
     distance_factor = 5 # 5 minutos extra por cada km
-    
+
     # Calcular distancia (simplificado)
     lat_diff = (order.delivery_location.lat - order.pickup_location.lat).abs
     lng_diff = (order.delivery_location.lng - order.pickup_location.lng).abs
     distance_km = Math.sqrt(lat_diff * lat_diff + lng_diff * lng_diff) * 111 # aprox km
-    
+
     (base_time + (distance_km * distance_factor)).to_i
   end
-  
+
   private def setup_demo_delivery_people
     ["Juan Repartidor", "María Delivery", "Carlos Express"].each do |name|
       person = DeliveryPerson.new(name)
@@ -218,10 +218,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         system.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-        
+
         socket.send({
-          type: "init",
-          system: system
+          type:   "init",
+          system: system,
         }.to_json)
       end
     end
@@ -241,17 +241,17 @@ server = HTTP::Server.new do |context|
               notes: item["notes"]?.try(&.as_s)
             )
           }
-          
+
           pickup = Location.new(
             data["pickup_location"]["lat"].as_f,
             data["pickup_location"]["lng"].as_f
           )
-          
+
           delivery = Location.new(
             data["delivery_location"]["lat"].as_f,
             data["delivery_location"]["lng"].as_f
           )
-          
+
           order = system.create_order(
             user_id,
             items,
@@ -259,41 +259,39 @@ server = HTTP::Server.new do |context|
             delivery,
             data["notes"]?.try(&.as_s)
           )
-          
+
           Hauyna::WebSocket::Events.send_to_group("users", {
-            type: "system_update",
-            system: system
+            type:   "system_update",
+            system: system,
           }.to_json)
-          
         when "update_location"
           if system.update_delivery_location(
-            user_id,
-            Location.new(
-              data["lat"].as_f,
-              data["lng"].as_f
-            )
-          )
+               user_id,
+               Location.new(
+                 data["lat"].as_f,
+                 data["lng"].as_f
+               )
+             )
             Hauyna::WebSocket::Events.send_to_group("users", {
-              type: "system_update",
-              system: system
+              type:   "system_update",
+              system: system,
             }.to_json)
           end
-          
         when "update_order_status"
           if system.update_order_status(
-            data["order_id"].as_s,
-            data["status"].as_s
-          )
+               data["order_id"].as_s,
+               data["status"].as_s
+             )
             Hauyna::WebSocket::Events.send_to_group("users", {
-              type: "system_update",
-              system: system
+              type:   "system_update",
+              system: system,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
@@ -303,18 +301,18 @@ server = HTTP::Server.new do |context|
   spawn do
     loop do
       sleep 5.seconds
-      
+
       pending_orders = system.orders.values.select { |o| o.status == "pending" }
       available_delivery = system.delivery_people.values.select { |d| d.status == "available" }
-      
+
       pending_orders.each do |order|
         if !available_delivery.empty?
           delivery_person = available_delivery.sample
           system.assign_delivery_person(order.id, delivery_person.id)
-          
+
           Hauyna::WebSocket::Events.send_to_group("users", {
-            type: "system_update",
-            system: system
+            type:   "system_update",
+            system: system,
           }.to_json)
         end
       end
@@ -322,7 +320,7 @@ server = HTTP::Server.new do |context|
   end
 
   router.websocket("/delivery", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -507,7 +505,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('delivery-system').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/delivery?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/delivery?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -547,23 +545,23 @@ server = HTTP::Server.new do |context|
             
             function updateItemsList() {
               const itemsList = document.getElementById('items-list');
-              itemsList.innerHTML = orderItems.map((item, index) => \`
+              itemsList.innerHTML = orderItems.map((item, index) => `
                 <div class="item">
                   <input type="text" placeholder="Nombre" 
-                         onchange="updateItem(\${index}, 'name', this.value)"
-                         value="\${item.name}">
+                         onchange="updateItem(${index}, 'name', this.value)"
+                         value="${item.name}">
                   <input type="number" min="1" 
-                         onchange="updateItem(\${index}, 'quantity', parseInt(this.value))"
-                         value="\${item.quantity}">
+                         onchange="updateItem(${index}, 'quantity', parseInt(this.value))"
+                         value="${item.quantity}">
                   <input type="number" step="0.01" min="0" 
-                         onchange="updateItem(\${index}, 'price', parseFloat(this.value))"
-                         value="\${item.price}">
+                         onchange="updateItem(${index}, 'price', parseFloat(this.value))"
+                         value="${item.price}">
                   <input type="text" placeholder="Notas" 
-                         onchange="updateItem(\${index}, 'notes', this.value)"
-                         value="\${item.notes || ''}">
-                  <button onclick="removeItem(\${index})">X</button>
+                         onchange="updateItem(${index}, 'notes', this.value)"
+                         value="${item.notes || ''}">
+                  <button onclick="removeItem(${index})">X</button>
                 </div>
-              \`).join('');
+              `).join('');
             }
             
             function updateItem(index, field, value) {
@@ -612,52 +610,52 @@ server = HTTP::Server.new do |context|
                   const deliveryPerson = order.delivery_person_id ? 
                     system.delivery_people[order.delivery_person_id] : null;
                   
-                  return \`
+                  return `
                     <div class="order-card">
                       <div class="order-header">
-                        <h3>Pedido #\${order.id}</h3>
-                        <div class="status-\${order.status}">
-                          \${order.status.toUpperCase()}
+                        <h3>Pedido #${order.id}</h3>
+                        <div class="status-${order.status}">
+                          ${order.status.toUpperCase()}
                         </div>
                       </div>
                       <div class="items-list">
-                        \${order.items.map(item => \`
+                        ${order.items.map(item => `
                           <div class="item">
-                            <span>\${item.quantity}x \${item.name}</span>
-                            <span>$\${(item.quantity * item.price).toFixed(2)}</span>
+                            <span>${item.quantity}x ${item.name}</span>
+                            <span>$${(item.quantity * item.price).toFixed(2)}</span>
                           </div>
-                        \`).join('')}
+                        `).join('')}
                         <div class="item">
                           <strong>Total:</strong>
-                          <strong>$\${order.total.toFixed(2)}</strong>
+                          <strong>$${order.total.toFixed(2)}</strong>
                         </div>
                       </div>
-                      \${deliveryPerson ? \`
-                        <div>Repartidor: \${deliveryPerson.name}</div>
-                        \${order.estimated_time ? \`
-                          <div>Tiempo estimado: \${order.estimated_time} minutos</div>
-                        \` : ''}
-                      \` : ''}
-                      <div class="map-container" id="map-\${order.id}"></div>
-                      \${order.status === 'pending' && order.customer_id === userId ? \`
-                        <button onclick="updateOrderStatus('\${order.id}', 'cancelled')">
+                      ${deliveryPerson ? `
+                        <div>Repartidor: ${deliveryPerson.name}</div>
+                        ${order.estimated_time ? `
+                          <div>Tiempo estimado: ${order.estimated_time} minutos</div>
+                        ` : ''}
+                      ` : ''}
+                      <div class="map-container" id="map-${order.id}"></div>
+                      ${order.status === 'pending' && order.customer_id === userId ? `
+                        <button onclick="updateOrderStatus('${order.id}', 'cancelled')">
                           Cancelar
                         </button>
-                      \` : ''}
-                      \${order.delivery_person_id === userId ? \`
+                      ` : ''}
+                      ${order.delivery_person_id === userId ? `
                         <div>
-                          <button onclick="updateOrderStatus('\${order.id}', 'picked_up')"
-                                  \${order.status !== 'assigned' ? 'disabled' : ''}>
+                          <button onclick="updateOrderStatus('${order.id}', 'picked_up')"
+                                  ${order.status !== 'assigned' ? 'disabled' : ''}>
                             Recogido
                           </button>
-                          <button onclick="updateOrderStatus('\${order.id}', 'delivered')"
-                                  \${order.status !== 'picked_up' ? 'disabled' : ''}>
+                          <button onclick="updateOrderStatus('${order.id}', 'delivered')"
+                                  ${order.status !== 'picked_up' ? 'disabled' : ''}>
                             Entregado
                           </button>
                         </div>
-                      \` : ''}
+                      ` : ''}
                     </div>
-                  \`;
+                  `;
                 }).join('');
               
               // Inicializar mapas de pedidos
@@ -667,7 +665,7 @@ server = HTTP::Server.new do |context|
                   order.delivery_person_id === userId
                 )
                 .forEach(order => {
-                  const mapId = \`map-\${order.id}\`;
+                  const mapId = `map-${order.id}`;
                   if (!maps[mapId]) {
                     const map = initMap(mapId, false);
                     
@@ -718,9 +716,9 @@ server = HTTP::Server.new do |context|
               const notificationsDiv = document.getElementById('notifications');
               notificationsDiv.innerHTML = system.notifications
                 .slice().reverse()
-                .map(notification => \`
-                  <div class="notification">\${notification}</div>
-                \`).join('');
+                .map(notification => `
+                  <div class="notification">${notification}</div>
+                `).join('');
             }
             
             function handleMessage(event) {
@@ -746,4 +744,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

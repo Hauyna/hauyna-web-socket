@@ -5,33 +5,33 @@ require "http/server"
 
 class Question
   include JSON::Serializable
-  
+
   property text : String
   property options : Array(String)
   property correct : Int32
   property time_limit : Int32
-  
+
   def initialize(@text : String, @options : Array(String), @correct : Int32, @time_limit : Int32 = 30)
   end
 end
 
 class Player
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property score : Int32
   property current_answer : Int32?
-  
+
   def initialize(@id : String, @name : String)
     @score = 0
     @current_answer = nil
   end
-  
+
   def answer(question_index : Int32, answer : Int32)
     @current_answer = answer
   end
-  
+
   def reset_answer
     @current_answer = nil
   end
@@ -39,13 +39,13 @@ end
 
 class Game
   include JSON::Serializable
-  
+
   property questions : Array(Question)
   property players : Hash(String, Player)
   property current_question : Int32
   property state : String # waiting, playing, showing_answer, finished
   property time_left : Int32
-  
+
   def initialize
     @questions = [
       Question.new(
@@ -62,33 +62,33 @@ class Game
         "¿Quién creó el lenguaje Ruby?",
         ["Yukihiro Matsumoto", "Guido van Rossum", "Brendan Eich", "James Gosling"],
         0
-      )
+      ),
     ]
     @players = {} of String => Player
     @current_question = 0
     @state = "waiting"
     @time_left = 30
   end
-  
+
   def add_player(id : String, name : String)
     @players[id] = Player.new(id, name)
   end
-  
+
   def start
     return false if @players.empty?
     @state = "playing"
     @time_left = current_question_obj.time_limit
     true
   end
-  
+
   def current_question_obj : Question
     @questions[@current_question]
   end
-  
+
   def answer(player_id : String, answer : Int32)
     return false unless @state == "playing"
     return false unless (0...current_question_obj.options.size).includes?(answer)
-    
+
     if player = @players[player_id]?
       player.answer(@current_question, answer)
       true
@@ -96,20 +96,20 @@ class Game
       false
     end
   end
-  
+
   def show_answer
     @state = "showing_answer"
-    
+
     @players.each_value do |player|
       if player.current_answer == current_question_obj.correct
         player.score += 100
       end
     end
   end
-  
+
   def next_question
     @current_question += 1
-    
+
     if @current_question >= @questions.size
       @state = "finished"
     else
@@ -135,15 +135,15 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         game.add_player(player_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(player_id, "players")
-        
+
         # Iniciar juego si hay suficientes jugadores
         if game.players.size >= 2 && game.state == "waiting"
           game.start
         end
-        
+
         Hauyna::WebSocket::Events.send_to_group("players", {
           type: "game_update",
-          game: game
+          game: game,
         }.to_json)
       end
     end
@@ -159,15 +159,15 @@ server = HTTP::Server.new do |context|
             if game.answer(player_id, answer)
               Hauyna::WebSocket::Events.send_to_group("players", {
                 type: "game_update",
-                game: game
+                game: game,
               }.to_json)
             end
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
@@ -179,26 +179,26 @@ server = HTTP::Server.new do |context|
       sleep 1.seconds
       if game.state == "playing" && game.time_left > 0
         game.time_left -= 1
-        
+
         if game.time_left == 0
           game.show_answer
-          
+
           Hauyna::WebSocket::Events.send_to_group("players", {
             type: "game_update",
-            game: game
+            game: game,
           }.to_json)
-          
+
           sleep 5.seconds
-          
+
           game.next_question
           Hauyna::WebSocket::Events.send_to_group("players", {
             type: "game_update",
-            game: game
+            game: game,
           }.to_json)
         else
           Hauyna::WebSocket::Events.send_to_group("players", {
             type: "time_update",
-            time: game.time_left
+            time: game.time_left,
           }.to_json)
         end
       end
@@ -206,7 +206,7 @@ server = HTTP::Server.new do |context|
   end
 
   router.websocket("/trivia", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -303,7 +303,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('game').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/trivia?player_id=\${playerId}&name=\${name}\`
+                `ws://localhost:8080/trivia?player_id=${playerId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -328,24 +328,24 @@ server = HTTP::Server.new do |context|
                     className += ' incorrect';
                   }
                 }
-                return \`
-                  <div class="\${className}"
-                       onclick="selectAnswer(\${index})"
-                       \${game.state !== 'playing' ? 'style="pointer-events: none"' : ''}>
-                    \${option}
+                return `
+                  <div class="${className}"
+                       onclick="selectAnswer(${index})"
+                       ${game.state !== 'playing' ? 'style="pointer-events: none"' : ''}>
+                    ${option}
                   </div>
-                \`;
+                `;
               }).join('');
               
               const players = document.getElementById('players');
               players.innerHTML = Object.values(game.players)
                 .sort((a, b) => b.score - a.score)
-                .map(player => \`
+                .map(player => `
                   <div class="player">
-                    <span>\${player.name}</span>
-                    <span>\${player.score} puntos</span>
+                    <span>${player.name}</span>
+                    <span>${player.score} puntos</span>
                   </div>
-                \`).join('');
+                `).join('');
             }
             
             function selectAnswer(index) {
@@ -370,7 +370,7 @@ server = HTTP::Server.new do |context|
                   
                 case 'time_update':
                   document.getElementById('timer').textContent = 
-                    \`Tiempo: \${data.time}s\`;
+                    `Tiempo: ${data.time}s`;
                   break;
                   
                 case 'error':
@@ -386,4 +386,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

@@ -5,24 +5,24 @@ require "http/server"
 
 class Presentation
   include JSON::Serializable
-  
+
   property slides : Array(String)
   property current_slide : Int32
   property presenter_id : String?
   property viewers : Set(String)
-  
+
   def initialize(@slides : Array(String))
     @current_slide = 0
     @presenter_id = nil
     @viewers = Set(String).new
   end
-  
+
   def next_slide : Bool
     return false if @current_slide >= @slides.size - 1
     @current_slide += 1
     true
   end
-  
+
   def previous_slide : Bool
     return false if @current_slide <= 0
     @current_slide -= 1
@@ -35,7 +35,7 @@ presentation = Presentation.new([
   "# Bienvenidos\n\nPresentación en tiempo real con Crystal",
   "## Características\n\n- Sincronización en tiempo real\n- Control de presentador\n- Markdown support",
   "## Ejemplo de código\n\n```crystal\nputs \"Hello World!\"\n```",
-  "# ¡Gracias!\n\n¿Preguntas?"
+  "# ¡Gracias!\n\n¿Preguntas?",
 ])
 
 server = HTTP::Server.new do |context|
@@ -49,15 +49,15 @@ server = HTTP::Server.new do |context|
   handler.on_open = ->(socket : HTTP::WebSocket, params : Hash(String, JSON::Any)) {
     if user_id = params["user_id"]?.try(&.as_s)
       presentation.viewers.add(user_id)
-      
+
       # El primer usuario se convierte en presentador
       presentation.presenter_id = user_id if presentation.presenter_id.nil?
-      
+
       Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "viewers")
       socket.send({
-        type: "init",
+        type:         "init",
         presentation: presentation,
-        is_presenter: user_id == presentation.presenter_id
+        is_presenter: user_id == presentation.presenter_id,
       }.to_json)
     end
   }
@@ -71,30 +71,30 @@ server = HTTP::Server.new do |context|
           when "next"
             if presentation.next_slide
               Hauyna::WebSocket::Events.send_to_group("viewers", {
-                type: "slide_change",
-                slide: presentation.current_slide
+                type:  "slide_change",
+                slide: presentation.current_slide,
               }.to_json)
             end
           when "previous"
             if presentation.previous_slide
               Hauyna::WebSocket::Events.send_to_group("viewers", {
-                type: "slide_change",
-                slide: presentation.current_slide
+                type:  "slide_change",
+                slide: presentation.current_slide,
               }.to_json)
             end
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/presentation", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -151,7 +151,7 @@ server = HTTP::Server.new do |context|
 
           <script>
             const userId = Math.random().toString(36).substr(2, 9);
-            const ws = new WebSocket(\`ws://localhost:8080/presentation?user_id=\${userId}\`);
+            const ws = new WebSocket(`ws://localhost:8080/presentation?user_id=${userId}`);
             const slide = document.getElementById('slide');
             const controls = document.getElementById('controls');
             const status = document.getElementById('status');
@@ -201,7 +201,7 @@ server = HTTP::Server.new do |context|
                   break;
                 
                 case 'error':
-                  status.textContent = \`Error: \${data.message}\`;
+                  status.textContent = `Error: ${data.message}`;
                   break;
               }
             };
@@ -213,4 +213,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

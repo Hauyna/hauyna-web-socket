@@ -5,7 +5,7 @@ require "http/server"
 
 class Task
   include JSON::Serializable
-  
+
   property id : String
   property title : String
   property description : String
@@ -15,7 +15,7 @@ class Task
   property created_at : Time
   property updated_at : Time
   property comments : Array(Comment)
-  
+
   def initialize(@title : String, @description : String, @created_by : String)
     @id = Random::Secure.hex(8)
     @status = "todo"
@@ -28,12 +28,12 @@ end
 
 class Comment
   include JSON::Serializable
-  
+
   property id : String
   property text : String
   property user_id : String
   property created_at : Time
-  
+
   def initialize(@text : String, @user_id : String)
     @id = Random::Secure.hex(8)
     @created_at = Time.local
@@ -42,48 +42,48 @@ end
 
 class Board
   include JSON::Serializable
-  
+
   property tasks : Hash(String, Task)
   property users : Hash(String, String) # user_id => name
   property activity_log : Array(String)
-  
+
   def initialize
     @tasks = {} of String => Task
     @users = {} of String => String
     @activity_log = [] of String
   end
-  
+
   def add_task(task : Task)
     @tasks[task.id] = task
     log_activity("#{@users[task.created_by]} creó la tarea '#{task.title}'")
   end
-  
+
   def update_task(task_id : String, status : String, assigned_to : String?)
     if task = @tasks[task_id]?
       old_status = task.status
       old_assigned = task.assigned_to
-      
+
       task.status = status.presence || "todo"
       task.assigned_to = assigned_to
       task.updated_at = Time.local
-      
+
       if old_status != task.status
         log_activity("Tarea '#{task.title}' movida a #{task.status}")
       end
-      
+
       if old_assigned != assigned_to && assigned_to && (user_name = @users[assigned_to]?)
         log_activity("Tarea '#{task.title}' asignada a #{user_name}")
       end
     end
   end
-  
+
   def add_comment(task_id : String, comment : Comment)
     if task = @tasks[task_id]?
       task.comments << comment
       log_activity("#{@users[comment.user_id]} comentó en '#{task.title}'")
     end
   end
-  
+
   private def log_activity(message : String)
     @activity_log.unshift("#{Time.local.to_s("%H:%M:%S")} - #{message}")
     @activity_log = @activity_log.first(50) # Mantener solo los últimos 50 registros
@@ -104,10 +104,10 @@ server = HTTP::Server.new do |context|
     if (user_id = params["user_id"]?.try(&.as_s)) && (name = params["name"]?.try(&.as_s))
       board.users[user_id] = name
       Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-      
+
       socket.send({
-        type: "init",
-        board: board
+        type:  "init",
+        board: board,
       }.to_json)
     end
   }
@@ -124,7 +124,6 @@ server = HTTP::Server.new do |context|
             created_by: user_id
           )
           board.add_task(task)
-          
         when "update_task"
           if (task_id = data["task_id"]?.try(&.as_s)) && (status = data["status"]?.try(&.as_s))
             board.update_task(
@@ -133,7 +132,6 @@ server = HTTP::Server.new do |context|
               assigned_to: data["assigned_to"]?.try(&.as_s)
             )
           end
-          
         when "add_comment"
           if (task_id = data["task_id"]?.try(&.as_s)) && (text = data["text"]?.try(&.as_s))
             comment = Comment.new(
@@ -143,22 +141,22 @@ server = HTTP::Server.new do |context|
             board.add_comment(task_id, comment)
           end
         end
-        
+
         Hauyna::WebSocket::Events.send_to_group("users", {
-          type: "board_update",
-          board: board
+          type:  "board_update",
+          board: board,
         }.to_json)
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/board", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -310,7 +308,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('board-container').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/board?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/board?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -391,24 +389,24 @@ server = HTTP::Server.new do |context|
               div.ondragstart = (e) => drag(e, task.id);
               div.ondragend = (e) => e.target.classList.remove('dragging');
               
-              div.innerHTML = \`
+              div.innerHTML = `
                 <div class="task-header">
-                  <span class="task-title">\${task.title}</span>
-                  <span class="task-assign" onclick="updateTask('\${task.id}', '\${task.status}', userId)">
-                    \${task.assigned_to && board.users[task.assigned_to] ? board.users[task.assigned_to] : 'Asignar'}
+                  <span class="task-title">${task.title}</span>
+                  <span class="task-assign" onclick="updateTask('${task.id}', '${task.status}', userId)">
+                    ${task.assigned_to && board.users[task.assigned_to] ? board.users[task.assigned_to] : 'Asignar'}
                   </span>
                 </div>
-                <div class="task-description">\${task.description}</div>
+                <div class="task-description">${task.description}</div>
                 <div class="comments">
-                  \${task.comments.map(comment => \`
+                  ${task.comments.map(comment => `
                     <div class="comment">
-                      <strong>\${board.users[comment.user_id] || 'Usuario Desconocido'}:</strong>
-                      \${comment.text}
+                      <strong>${board.users[comment.user_id] || 'Usuario Desconocido'}:</strong>
+                      ${comment.text}
                     </div>
-                  \`).join('')}
-                  <button onclick="addComment('\${task.id}')">Comentar</button>
+                  `).join('')}
+                  <button onclick="addComment('${task.id}')">Comentar</button>
                 </div>
-              \`;
+              `;
               
               return div;
             }
@@ -426,9 +424,9 @@ server = HTTP::Server.new do |context|
               });
               
               document.getElementById('activity').innerHTML = 
-                board.activity_log.map(item => \`
-                  <div class="activity-item">\${item}</div>
-                \`).join('');
+                board.activity_log.map(item => `
+                  <div class="activity-item">${item}</div>
+                `).join('');
             }
             
             function handleMessage(event) {
@@ -454,4 +452,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

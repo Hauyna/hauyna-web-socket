@@ -5,7 +5,7 @@ require "http/server"
 
 class Item
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property description : String
@@ -17,7 +17,7 @@ class Item
   property auto_bidders : Hash(String, Float64) # user_id => max_bid
   property end_time : Time
   property status : String # active, ended
-  
+
   def initialize(@name : String, @description : String, @image_url : String, @starting_price : Float64, @min_increment : Float64, duration_minutes : Int32)
     @id = Random::Secure.hex(8)
     @current_price = @starting_price
@@ -26,39 +26,39 @@ class Item
     @end_time = Time.local + Time::Span.new(minutes: duration_minutes)
     @status = "active"
   end
-  
+
   def place_bid(user_id : String, amount : Float64, max_amount : Float64? = nil) : Bool
     return false if @status != "active" || Time.local > @end_time
     return false if amount <= @current_price
     return false if amount < @current_price + @min_increment
-    
+
     if max_amount
       @auto_bidders[user_id] = max_amount
     else
       @auto_bidders.delete(user_id)
     end
-    
+
     @current_price = amount
     @highest_bidder = user_id
-    
+
     process_auto_bids
     true
   end
-  
+
   private def process_auto_bids
     loop do
       highest_auto = @auto_bidders.reject { |id, _| id == @highest_bidder }
         .max_by? { |_, max| max }
-      
+
       break unless highest_auto
       break if highest_auto[1] <= @current_price + @min_increment
-      
+
       new_amount = [@current_price + @min_increment, highest_auto[1]].min
       @current_price = new_amount
       @highest_bidder = highest_auto[0]
     end
   end
-  
+
   def time_remaining : Int32
     remaining = (@end_time - Time.local).total_seconds.to_i
     remaining > 0 ? remaining : 0
@@ -67,19 +67,19 @@ end
 
 class AuctionHouse
   include JSON::Serializable
-  
+
   property items : Hash(String, Item)
   property users : Hash(String, String) # user_id => name
-  
+
   def initialize
     @items = {} of String => Item
     @users = {} of String => String
   end
-  
+
   def add_item(item : Item)
     @items[item.id] = item
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
@@ -117,10 +117,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         auction.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "bidders")
-        
+
         socket.send({
-          type: "init",
-          auction: auction
+          type:    "init",
+          auction: auction,
         }.to_json)
       end
     end
@@ -135,19 +135,19 @@ server = HTTP::Server.new do |context|
           if item = auction.items[data["item_id"].as_s]?
             amount = data["amount"].as_f
             max_amount = data["max_amount"]?.try(&.as_f)
-            
+
             if item.place_bid(user_id, amount, max_amount)
               Hauyna::WebSocket::Events.send_to_group("bidders", {
                 type: "item_update",
-                item: item
+                item: item,
               }.to_json)
             end
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
@@ -157,26 +157,26 @@ server = HTTP::Server.new do |context|
   spawn do
     loop do
       sleep 1.seconds
-      
+
       auction.items.each_value do |item|
         if item.status == "active" && item.time_remaining == 0
           item.status = "ended"
           Hauyna::WebSocket::Events.send_to_group("bidders", {
             type: "auction_ended",
-            item: item
+            item: item,
           }.to_json)
         end
       end
-      
+
       Hauyna::WebSocket::Events.send_to_group("bidders", {
-        type: "time_update",
-        items: auction.items.transform_values(&.time_remaining)
+        type:  "time_update",
+        items: auction.items.transform_values(&.time_remaining),
       }.to_json)
     end
   end
 
   router.websocket("/auction", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -274,7 +274,7 @@ server = HTTP::Server.new do |context|
             function formatTime(seconds) {
               const mins = Math.floor(seconds / 60);
               const secs = seconds % 60;
-              return \`\${mins}:\${secs.toString().padStart(2, '0')}\`;
+              return `${mins}:${secs.toString().padStart(2, '0')}`;
             }
             
             function formatPrice(price) {
@@ -282,8 +282,8 @@ server = HTTP::Server.new do |context|
             }
             
             function placeBid(itemId) {
-              const amount = parseFloat(document.getElementById(\`bid-\${itemId}\`).value);
-              const maxAmount = parseFloat(document.getElementById(\`max-bid-\${itemId}\`).value || 0);
+              const amount = parseFloat(document.getElementById(`bid-${itemId}`).value);
+              const maxAmount = parseFloat(document.getElementById(`max-bid-${itemId}`).value || 0);
               
               if (amount) {
                 ws.send(JSON.stringify({
@@ -298,36 +298,36 @@ server = HTTP::Server.new do |context|
             function updateItems() {
               const itemsDiv = document.getElementById('items');
               itemsDiv.innerHTML = Object.values(auction.items)
-                .map(item => \`
-                  <div class="item \${item.status === 'ended' ? 'ended' : ''}">
-                    <img src="\${item.image_url}" class="item-image">
-                    <div class="item-title">\${item.name}</div>
-                    <div class="item-description">\${item.description}</div>
+                .map(item => `
+                  <div class="item ${item.status === 'ended' ? 'ended' : ''}">
+                    <img src="${item.image_url}" class="item-image">
+                    <div class="item-title">${item.name}</div>
+                    <div class="item-description">${item.description}</div>
                     <div class="current-price">
-                      Precio actual: $\${formatPrice(item.current_price)}
+                      Precio actual: $${formatPrice(item.current_price)}
                     </div>
-                    \${item.highest_bidder ? \`
+                    ${item.highest_bidder ? `
                       <div class="highest-bidder">
-                        Mejor postor: \${auction.users[item.highest_bidder]}
+                        Mejor postor: ${auction.users[item.highest_bidder]}
                       </div>
-                    \` : ''}
-                    <div class="timer" id="timer-\${item.id}"></div>
-                    \${item.status === 'active' ? \`
+                    ` : ''}
+                    <div class="timer" id="timer-${item.id}"></div>
+                    ${item.status === 'active' ? `
                       <div class="bid-form">
-                        <input type="number" id="bid-\${item.id}"
-                               min="\${item.current_price + item.min_increment}"
-                               step="\${item.min_increment}"
+                        <input type="number" id="bid-${item.id}"
+                               min="${item.current_price + item.min_increment}"
+                               step="${item.min_increment}"
                                placeholder="Tu puja">
-                        <button onclick="placeBid('\${item.id}')">Pujar</button>
+                        <button onclick="placeBid('${item.id}')">Pujar</button>
                         <div class="auto-bid">
                           <div>Puja automática (opcional)</div>
-                          <input type="number" id="max-bid-\${item.id}"
+                          <input type="number" id="max-bid-${item.id}"
                                  placeholder="Puja máxima">
                         </div>
                       </div>
-                    \` : ''}
+                    ` : ''}
                   </div>
-                \`).join('');
+                `).join('');
             }
             
             function joinAuction() {
@@ -338,7 +338,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('auction-house').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/auction?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/auction?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = (event) => {
@@ -359,15 +359,15 @@ server = HTTP::Server.new do |context|
                     auction.items[data.item.id] = data.item;
                     updateItems();
                     if (data.item.highest_bidder === userId) {
-                      alert(\`¡Felicidades! Has ganado la subasta de \${data.item.name}\`);
+                      alert(`¡Felicidades! Has ganado la subasta de ${data.item.name}`);
                     }
                     break;
                     
                   case 'time_update':
                     Object.entries(data.items).forEach(([id, time]) => {
-                      const timer = document.getElementById(\`timer-\${id}\`);
+                      const timer = document.getElementById(`timer-${id}`);
                       if (timer) {
-                        timer.textContent = \`Tiempo restante: \${formatTime(time)}\`;
+                        timer.textContent = `Tiempo restante: ${formatTime(time)}`;
                       }
                     });
                     break;
@@ -386,4 +386,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

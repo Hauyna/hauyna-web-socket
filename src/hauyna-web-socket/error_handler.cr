@@ -14,9 +14,9 @@ module Hauyna
 
       private def self.send_error(socket : HTTP::WebSocket, type : String, message : String)
         error_message = {
-          type: "error",
+          type:       "error",
           error_type: type,
-          message: message
+          message:    message,
         }.to_json
 
         begin
@@ -28,4 +28,4 @@ module Hauyna
       end
     end
   end
-end 
+end

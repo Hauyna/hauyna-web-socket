@@ -17,7 +17,7 @@ server = HTTP::Server.new do |context|
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "user_#{user_id}")
         # Añadir usuario al grupo de notificaciones generales
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "general_notifications")
-        
+
         socket.send(JSON.build { |json|
           json.object do
             json.field "type", "connected"
@@ -29,7 +29,7 @@ server = HTTP::Server.new do |context|
   )
 
   router.websocket("/notifications", handler)
-  
+
   next if router.call(context)
 
   case context.request.path
@@ -143,4 +143,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

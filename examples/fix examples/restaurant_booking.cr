@@ -5,13 +5,13 @@ require "http/server"
 
 class Table
   include JSON::Serializable
-  
+
   property id : Int32
   property seats : Int32
   property location : String # window, terrace, indoor
-  property status : String # available, reserved, occupied
+  property status : String   # available, reserved, occupied
   property reservation : Reservation?
-  
+
   def initialize(@id : Int32, @seats : Int32, @location : String)
     @status = "available"
     @reservation = nil
@@ -20,7 +20,7 @@ end
 
 class Reservation
   include JSON::Serializable
-  
+
   property id : String
   property customer_id : String
   property customer_name : String
@@ -30,7 +30,7 @@ class Reservation
   property special_requests : String
   property status : String # pending, confirmed, cancelled, completed
   property created_at : Time
-  
+
   def initialize(@customer_id : String, @customer_name : String, @guests : Int32, @date : String, @time_slot : String, @special_requests : String)
     @id = Random::Secure.hex(8)
     @status = "pending"
@@ -40,18 +40,18 @@ end
 
 class Restaurant
   include JSON::Serializable
-  
+
   TIME_SLOTS = ["18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00"]
-  
+
   property tables : Array(Table)
   property reservations : Hash(String, Reservation)
   property users : Hash(String, String) # user_id => name
-  
+
   def initialize
     @tables = [] of Table
     @reservations = {} of String => Reservation
     @users = {} of String => String
-    
+
     # Crear mesas de ejemplo
     [
       {id: 1, seats: 2, location: "window"},
@@ -59,30 +59,30 @@ class Restaurant
       {id: 3, seats: 4, location: "indoor"},
       {id: 4, seats: 4, location: "indoor"},
       {id: 5, seats: 6, location: "terrace"},
-      {id: 6, seats: 8, location: "terrace"}
+      {id: 6, seats: 8, location: "terrace"},
     ].each do |t|
       @tables << Table.new(t[:id], t[:seats], t[:location])
     end
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
+
   def available_tables(date : String, time_slot : String, guests : Int32) : Array(Table)
     @tables.select do |table|
       table.status == "available" &&
-      table.seats >= guests &&
-      table.seats <= guests + 2 # No asignar mesas muy grandes
+        table.seats >= guests &&
+        table.seats <= guests + 2 # No asignar mesas muy grandes
     end
   end
-  
+
   def make_reservation(customer_id : String, customer_name : String, table_id : Int32, guests : Int32, date : String, time_slot : String, special_requests : String) : Reservation?
     return nil unless TIME_SLOTS.includes?(time_slot)
-    
+
     if table = @tables.find { |t| t.id == table_id }
       return nil unless table.status == "available"
-      
+
       reservation = Reservation.new(
         customer_id,
         customer_name,
@@ -91,22 +91,22 @@ class Restaurant
         time_slot,
         special_requests
       )
-      
+
       @reservations[reservation.id] = reservation
       table.reservation = reservation
       table.status = "reserved"
-      
+
       reservation
     end
   end
-  
+
   def cancel_reservation(reservation_id : String) : Bool
     if reservation = @reservations[reservation_id]?
       if table = @tables.find { |t| t.reservation.try(&.id) == reservation_id }
         table.status = "available"
         table.reservation = nil
       end
-      
+
       reservation.status = "cancelled"
       true
     else
@@ -130,10 +130,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         restaurant.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "customers")
-        
+
         socket.send({
-          type: "init",
-          restaurant: restaurant
+          type:       "init",
+          restaurant: restaurant,
         }.to_json)
       end
     end
@@ -150,52 +150,50 @@ server = HTTP::Server.new do |context|
             data["time_slot"].as_s,
             data["guests"].as_i
           )
-          
+
           socket.send({
-            type: "availability_result",
-            tables: available
+            type:   "availability_result",
+            tables: available,
           }.to_json)
-          
         when "make_reservation"
           if reservation = restaurant.make_reservation(
-            user_id,
-            restaurant.users[user_id],
-            data["table_id"].as_i,
-            data["guests"].as_i,
-            data["date"].as_s,
-            data["time_slot"].as_s,
-            data["special_requests"].as_s
-          )
+               user_id,
+               restaurant.users[user_id],
+               data["table_id"].as_i,
+               data["guests"].as_i,
+               data["date"].as_s,
+               data["time_slot"].as_s,
+               data["special_requests"].as_s
+             )
             Hauyna::WebSocket::Events.send_to_group("customers", {
-              type: "table_update",
-              tables: restaurant.tables
+              type:   "table_update",
+              tables: restaurant.tables,
             }.to_json)
-            
+
             socket.send({
-              type: "reservation_confirmed",
-              reservation: reservation
+              type:        "reservation_confirmed",
+              reservation: reservation,
             }.to_json)
           end
-          
         when "cancel_reservation"
           if restaurant.cancel_reservation(data["reservation_id"].as_s)
             Hauyna::WebSocket::Events.send_to_group("customers", {
-              type: "table_update",
-              tables: restaurant.tables
+              type:   "table_update",
+              tables: restaurant.tables,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
   }
 
   router.websocket("/booking", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -286,13 +284,13 @@ server = HTTP::Server.new do |context|
                 <h2>Nueva Reserva</h2>
                 <div class="form-group">
                   <label>Fecha</label>
-                  <input type="date" id="date" min="\${new Date().toISOString().split('T')[0]}">
+                  <input type="date" id="date" min="${new Date().toISOString().split('T')[0]}">
                 </div>
                 <div class="form-group">
                   <label>Hora</label>
                   <select id="time_slot">
-                    \${Restaurant.TIME_SLOTS.map(slot => 
-                      \`<option value="\${slot}">\${slot}</option>\`
+                    ${Restaurant.TIME_SLOTS.map(slot => 
+                      `<option value="${slot}">${slot}</option>`
                     ).join('')}
                   </select>
                 </div>
@@ -334,7 +332,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('booking-system').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/booking?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/booking?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -389,16 +387,16 @@ server = HTTP::Server.new do |context|
             
             function updateTables(tables) {
               const tablesDiv = document.getElementById('tables');
-              tablesDiv.innerHTML = tables.map(table => \`
-                <div class="table \${table.status}"
-                     data-id="\${table.id}"
-                     onclick="\${table.status === 'available' ? \`selectTable(\${table.id})\` : ''}">
-                  <div>Mesa #\${table.id}</div>
-                  <div>\${table.seats} personas</div>
-                  <div>\${table.location}</div>
-                  <div>\${table.status}</div>
+              tablesDiv.innerHTML = tables.map(table => `
+                <div class="table ${table.status}"
+                     data-id="${table.id}"
+                     onclick="${table.status === 'available' ? `selectTable(${table.id})` : ''}">
+                  <div>Mesa #${table.id}</div>
+                  <div>${table.seats} personas</div>
+                  <div>${table.location}</div>
+                  <div>${table.status}</div>
                 </div>
-              \`).join('');
+              `).join('');
             }
             
             function updateReservations() {
@@ -406,22 +404,22 @@ server = HTTP::Server.new do |context|
               const myReservations = Object.values(restaurant.reservations)
                 .filter(r => r.customer_id === userId);
               
-              reservationsDiv.innerHTML = myReservations.map(reservation => \`
+              reservationsDiv.innerHTML = myReservations.map(reservation => `
                 <div class="reservation">
                   <div class="reservation-header">
-                    <strong>Reserva #\${reservation.id}</strong>
-                    \${reservation.status === 'pending' ? \`
-                      <button onclick="cancelReservation('\${reservation.id}')">
+                    <strong>Reserva #${reservation.id}</strong>
+                    ${reservation.status === 'pending' ? `
+                      <button onclick="cancelReservation('${reservation.id}')">
                         Cancelar
                       </button>
-                    \` : ''}
+                    ` : ''}
                   </div>
-                  <div>Fecha: \${reservation.date}</div>
-                  <div>Hora: \${reservation.time_slot}</div>
-                  <div>Comensales: \${reservation.guests}</div>
-                  <div>Estado: \${reservation.status}</div>
+                  <div>Fecha: ${reservation.date}</div>
+                  <div>Hora: ${reservation.time_slot}</div>
+                  <div>Comensales: ${reservation.guests}</div>
+                  <div>Estado: ${reservation.status}</div>
                 </div>
-              \`).join('');
+              `).join('');
             }
             
             function handleMessage(event) {
@@ -460,4 +458,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

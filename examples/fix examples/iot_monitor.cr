@@ -5,7 +5,7 @@ require "http/server"
 
 class Sensor
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property type : String # temperature, humidity, pressure, co2, light
@@ -15,7 +15,7 @@ class Sensor
   property status : String # normal, warning, alert
   property last_reading : Time
   property thresholds : Thresholds
-  
+
   def initialize(@name : String, @type : String, @location : String, @thresholds : Thresholds)
     @id = Random::Secure.hex(8)
     @value = 0.0
@@ -23,13 +23,13 @@ class Sensor
     @status = "normal"
     @last_reading = Time.local
   end
-  
+
   def update_reading(value : Float64)
     @value = value
     @last_reading = Time.local
     @status = calculate_status
   end
-  
+
   def calculate_status : String
     case @type
     when "temperature"
@@ -60,38 +60,38 @@ class Sensor
       "normal"
     end
   end
-  
+
   private def get_unit : String
     case @type
     when "temperature" then "°C"
-    when "humidity" then "%"
-    when "pressure" then "hPa"
-    when "co2" then "ppm"
-    when "light" then "lux"
-    else "unknown"
+    when "humidity"    then "%"
+    when "pressure"    then "hPa"
+    when "co2"         then "ppm"
+    when "light"       then "lux"
+    else                    "unknown"
     end
   end
 end
 
 class Thresholds
   include JSON::Serializable
-  
+
   property warning_low : Float64
   property warning_high : Float64
   property critical_low : Float64
   property critical_high : Float64
-  
+
   def initialize(@warning_low : Float64, @warning_high : Float64, @critical_low : Float64, @critical_high : Float64)
   end
 end
 
 class Reading
   include JSON::Serializable
-  
+
   property sensor_id : String
   property value : Float64
   property timestamp : Time
-  
+
   def initialize(@sensor_id : String, @value : Float64)
     @timestamp = Time.local
   end
@@ -99,69 +99,69 @@ end
 
 class IoTSystem
   include JSON::Serializable
-  
+
   property sensors : Hash(String, Sensor)
   property readings : Array(Reading)
   property alerts : Array(String)
   property users : Hash(String, String)
-  
+
   def initialize
     @sensors = {} of String => Sensor
     @readings = [] of Reading
     @alerts = [] of String
     @users = {} of String => String
-    
+
     setup_demo_sensors
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
+
   def add_reading(sensor_id : String, value : Float64)
     if sensor = @sensors[sensor_id]?
       old_status = sensor.status
       sensor.update_reading(value)
-      
+
       reading = Reading.new(sensor_id, value)
       @readings << reading
       @readings = @readings.last(1000) # Mantener últimas 1000 lecturas
-      
+
       if old_status != sensor.status
         add_alert("#{sensor.name} en #{sensor.location}: #{sensor.status.upcase} (#{sensor.value}#{sensor.unit})")
       end
-      
+
       true
     else
       false
     end
   end
-  
+
   private def add_alert(message : String)
     @alerts << "[#{Time.local}] #{message}"
     @alerts = @alerts.last(50)
   end
-  
+
   private def setup_demo_sensors
     [
       {
-        name: "Sensor Temperatura 1",
-        type: "temperature",
-        location: "Sala de Servidores",
-        thresholds: Thresholds.new(18.0, 25.0, 15.0, 28.0)
+        name:       "Sensor Temperatura 1",
+        type:       "temperature",
+        location:   "Sala de Servidores",
+        thresholds: Thresholds.new(18.0, 25.0, 15.0, 28.0),
       },
       {
-        name: "Sensor Humedad 1",
-        type: "humidity",
-        location: "Sala de Servidores",
-        thresholds: Thresholds.new(30.0, 70.0, 20.0, 80.0)
+        name:       "Sensor Humedad 1",
+        type:       "humidity",
+        location:   "Sala de Servidores",
+        thresholds: Thresholds.new(30.0, 70.0, 20.0, 80.0),
       },
       {
-        name: "Sensor CO2",
-        type: "co2",
-        location: "Oficina Principal",
-        thresholds: Thresholds.new(600.0, 1000.0, 800.0, 2000.0)
-      }
+        name:       "Sensor CO2",
+        type:       "co2",
+        location:   "Oficina Principal",
+        thresholds: Thresholds.new(600.0, 1000.0, 800.0, 2000.0),
+      },
     ].each do |s|
       sensor = Sensor.new(
         name: s[:name],
@@ -189,10 +189,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         system.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-        
+
         socket.send({
-          type: "init",
-          system: system
+          type:   "init",
+          system: system,
         }.to_json)
       end
     end
@@ -202,23 +202,23 @@ server = HTTP::Server.new do |context|
   spawn do
     loop do
       sleep 2.seconds
-      
+
       system.sensors.each do |id, sensor|
         # Simular lecturas con variación aleatoria
         base_value = case sensor.type
-        when "temperature" then 22.0
-        when "humidity" then 50.0
-        when "co2" then 800.0
-        else 0.0
-        end
-        
+                     when "temperature" then 22.0
+                     when "humidity"    then 50.0
+                     when "co2"         then 800.0
+                     else                    0.0
+                     end
+
         variation = (rand - 0.5) * 10
         new_value = base_value + variation
-        
+
         if system.add_reading(id, new_value)
           Hauyna::WebSocket::Events.send_to_group("users", {
-            type: "system_update",
-            system: system
+            type:   "system_update",
+            system: system,
           }.to_json)
         end
       end
@@ -226,7 +226,7 @@ server = HTTP::Server.new do |context|
   end
 
   router.websocket("/iot", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -319,7 +319,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('iot-system').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/iot?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/iot?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -354,26 +354,26 @@ server = HTTP::Server.new do |context|
               // Actualizar sensores
               const sensorsDiv = document.getElementById('sensors');
               sensorsDiv.innerHTML = Object.values(system.sensors)
-                .map(sensor => \`
+                .map(sensor => `
                   <div class="sensor-card">
                     <div class="sensor-header">
-                      <h3>\${sensor.name}</h3>
-                      <div class="sensor-value status-\${sensor.status}">
-                        \${sensor.value.toFixed(1)}\${sensor.unit}
+                      <h3>${sensor.name}</h3>
+                      <div class="sensor-value status-${sensor.status}">
+                        ${sensor.value.toFixed(1)}${sensor.unit}
                       </div>
                     </div>
-                    <div>Ubicación: \${sensor.location}</div>
-                    <div>Estado: \${sensor.status.toUpperCase()}</div>
-                    <div>Última lectura: \${new Date(sensor.last_reading).toLocaleTimeString()}</div>
+                    <div>Ubicación: ${sensor.location}</div>
+                    <div>Estado: ${sensor.status.toUpperCase()}</div>
+                    <div>Última lectura: ${new Date(sensor.last_reading).toLocaleTimeString()}</div>
                     <div class="chart-container">
-                      <canvas id="chart-\${sensor.id}"></canvas>
+                      <canvas id="chart-${sensor.id}"></canvas>
                     </div>
                   </div>
-                \`).join('');
+                `).join('');
               
               // Inicializar o actualizar gráficos
               Object.values(system.sensors).forEach(sensor => {
-                const ctx = document.getElementById(\`chart-\${sensor.id}\`);
+                const ctx = document.getElementById(`chart-${sensor.id}`);
                 if (!charts[sensor.id]) {
                   charts[sensor.id] = createChart(ctx, sensor.name);
                 }
@@ -393,9 +393,9 @@ server = HTTP::Server.new do |context|
               const alertsDiv = document.getElementById('alerts');
               alertsDiv.innerHTML = system.alerts
                 .slice().reverse()
-                .map(alert => \`
-                  <div class="alert">\${alert}</div>
-                \`).join('');
+                .map(alert => `
+                  <div class="alert">${alert}</div>
+                `).join('');
             }
             
             function handleMessage(event) {
@@ -421,4 +421,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

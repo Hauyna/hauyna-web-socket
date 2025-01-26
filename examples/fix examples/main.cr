@@ -12,10 +12,10 @@ chat_handler = Hauyna::WebSocket::Handler.new(
   },
   on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
     puts "Mensaje recibido: #{data}"
-    
+
     begin
       action = data["event"]?.try(&.as_s)
-      
+
       case action
       when "broadcast"
         content = data["content"]?.try(&.as_s)

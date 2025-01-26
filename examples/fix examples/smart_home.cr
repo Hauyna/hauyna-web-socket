@@ -5,49 +5,49 @@ require "http/server"
 
 class Device
   include JSON::Serializable
-  
+
   property id : String
   property name : String
-  property type : String # light, thermostat, camera, lock, sensor
-  property status : String # on/off, temperature, motion, locked/unlocked
+  property type : String    # light, thermostat, camera, lock, sensor
+  property status : String  # on/off, temperature, motion, locked/unlocked
   property value : Float64? # para temperatura, brillo, etc
   property room : String
   property last_update : Time
-  
+
   def initialize(@name : String, @type : String, @room : String)
     @id = Random::Secure.hex(8)
     @status = default_status
     @value = default_value
     @last_update = Time.local
   end
-  
+
   private def default_status : String
     case @type
-    when "light" then "off"
+    when "light"      then "off"
     when "thermostat" then "off"
-    when "camera" then "off"
-    when "lock" then "locked"
-    when "sensor" then "no-motion"
-    else "unknown"
+    when "camera"     then "off"
+    when "lock"       then "locked"
+    when "sensor"     then "no-motion"
+    else                   "unknown"
     end
   end
-  
+
   private def default_value : Float64?
     case @type
     when "thermostat" then 21.0
-    when "light" then 0.0
-    else nil
+    when "light"      then 0.0
+    else                   nil
     end
   end
 end
 
 class Scene
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property actions : Array(SceneAction)
-  
+
   def initialize(@name : String, @actions : Array(SceneAction))
     @id = Random::Secure.hex(8)
   end
@@ -55,118 +55,118 @@ end
 
 class SceneAction
   include JSON::Serializable
-  
+
   property device_id : String
   property status : String
   property value : Float64?
-  
+
   def initialize(@device_id : String, @status : String, @value : Float64? = nil)
   end
 end
 
 class SmartHome
   include JSON::Serializable
-  
+
   property devices : Hash(String, Device)
   property scenes : Hash(String, Scene)
   property users : Hash(String, String) # user_id => name
   property activity_log : Array(String)
-  
+
   def initialize
     @devices = {} of String => Device
     @scenes = {} of String => Scene
     @users = {} of String => String
     @activity_log = [] of String
-    
+
     setup_demo_devices
     setup_demo_scenes
   end
-  
+
   def add_user(id : String, name : String)
     @users[id] = name
   end
-  
+
   def update_device(device_id : String, status : String, value : Float64? = nil) : Bool
     if device = @devices[device_id]?
       old_status = device.status
       old_value = device.value
-      
+
       device.status = status
       device.value = value
       device.last_update = Time.local
-      
+
       log_activity("#{device.name} en #{device.room}: #{old_status} -> #{status}")
       true
     else
       false
     end
   end
-  
+
   def activate_scene(scene_id : String) : Bool
     if scene = @scenes[scene_id]?
       scene.actions.each do |action|
         update_device(action.device_id, action.status, action.value)
       end
-      
+
       log_activity("Escena activada: #{scene.name}")
       true
     else
       false
     end
   end
-  
+
   private def setup_demo_devices
     # Luces
     add_device(Device.new("Luz Principal", "light", "Sala"))
     add_device(Device.new("Luz Ambiente", "light", "Sala"))
     add_device(Device.new("Luz Escritorio", "light", "Oficina"))
-    
+
     # Termostatos
     add_device(Device.new("Termostato", "thermostat", "Sala"))
     add_device(Device.new("Termostato", "thermostat", "Dormitorio"))
-    
+
     # Cámaras
     add_device(Device.new("Cámara Entrada", "camera", "Entrada"))
     add_device(Device.new("Cámara Patio", "camera", "Patio"))
-    
+
     # Cerraduras
     add_device(Device.new("Cerradura Principal", "lock", "Entrada"))
     add_device(Device.new("Cerradura Garaje", "lock", "Garaje"))
-    
+
     # Sensores
     add_device(Device.new("Sensor Movimiento", "sensor", "Entrada"))
     add_device(Device.new("Sensor Movimiento", "sensor", "Patio"))
   end
-  
+
   private def setup_demo_scenes
     # Escena: Llegada a casa
     @scenes["arrival"] = Scene.new("Llegada a Casa", [
       SceneAction.new(@devices.values.find { |d| d.name == "Luz Principal" }.not_nil!.id, "on", 100.0),
       SceneAction.new(@devices.values.find { |d| d.name == "Termostato" && d.room == "Sala" }.not_nil!.id, "on", 22.0),
-      SceneAction.new(@devices.values.find { |d| d.name == "Cerradura Principal" }.not_nil!.id, "unlocked")
+      SceneAction.new(@devices.values.find { |d| d.name == "Cerradura Principal" }.not_nil!.id, "unlocked"),
     ])
-    
+
     # Escena: Salida de casa
     @scenes["departure"] = Scene.new("Salida de Casa", [
       SceneAction.new(@devices.values.find { |d| d.type == "light" }.not_nil!.id, "off"),
       SceneAction.new(@devices.values.find { |d| d.type == "thermostat" }.not_nil!.id, "off"),
       SceneAction.new(@devices.values.find { |d| d.type == "lock" }.not_nil!.id, "locked"),
-      SceneAction.new(@devices.values.find { |d| d.type == "camera" }.not_nil!.id, "on")
+      SceneAction.new(@devices.values.find { |d| d.type == "camera" }.not_nil!.id, "on"),
     ])
-    
+
     # Escena: Modo Noche
     @scenes["night"] = Scene.new("Modo Noche", [
       SceneAction.new(@devices.values.find { |d| d.name == "Luz Ambiente" }.not_nil!.id, "on", 30.0),
       SceneAction.new(@devices.values.find { |d| d.type == "thermostat" }.not_nil!.id, "on", 20.0),
       SceneAction.new(@devices.values.find { |d| d.type == "lock" }.not_nil!.id, "locked"),
-      SceneAction.new(@devices.values.find { |d| d.type == "camera" }.not_nil!.id, "on")
+      SceneAction.new(@devices.values.find { |d| d.type == "camera" }.not_nil!.id, "on"),
     ])
   end
-  
+
   private def add_device(device : Device)
     @devices[device.id] = device
   end
-  
+
   private def log_activity(message : String)
     @activity_log << "[#{Time.local}] #{message}"
     @activity_log = @activity_log.last(50) # Mantener solo las últimas 50 actividades
@@ -188,10 +188,10 @@ server = HTTP::Server.new do |context|
       if name = params["name"]?.try(&.as_s)
         home.add_user(user_id, name)
         Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, "users")
-        
+
         socket.send({
           type: "init",
-          home: home
+          home: home,
         }.to_json)
       end
     end
@@ -204,32 +204,31 @@ server = HTTP::Server.new do |context|
         case data["type"]?.try(&.as_s)
         when "update_device"
           value = if v = data["value"]?
-            v.as_f?
-          end
-          
+                    v.as_f?
+                  end
+
           if home.update_device(
-            data["device_id"].as_s,
-            data["status"].as_s,
-            value
-          )
+               data["device_id"].as_s,
+               data["status"].as_s,
+               value
+             )
             Hauyna::WebSocket::Events.send_to_group("users", {
               type: "home_update",
-              home: home
+              home: home,
             }.to_json)
           end
-          
         when "activate_scene"
           if home.activate_scene(data["scene_id"].as_s)
             Hauyna::WebSocket::Events.send_to_group("users", {
               type: "home_update",
-              home: home
+              home: home,
             }.to_json)
           end
         end
       rescue ex
         socket.send({
-          type: "error",
-          message: ex.message
+          type:    "error",
+          message: ex.message,
         }.to_json)
       end
     end
@@ -239,7 +238,7 @@ server = HTTP::Server.new do |context|
   spawn do
     loop do
       sleep rand(5..15).seconds
-      
+
       # Simular detección de movimiento aleatoria
       sensors = home.devices.values.select { |d| d.type == "sensor" }
       if sensor = sensors.sample
@@ -248,17 +247,17 @@ server = HTTP::Server.new do |context|
           ["motion", "no-motion"].sample,
           nil
         )
-        
+
         Hauyna::WebSocket::Events.send_to_group("users", {
           type: "home_update",
-          home: home
+          home: home,
         }.to_json)
       end
     end
   end
 
   router.websocket("/smart-home", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -372,7 +371,7 @@ server = HTTP::Server.new do |context|
               document.getElementById('smart-home').style.display = 'block';
               
               ws = new WebSocket(
-                \`ws://localhost:8080/smart-home?user_id=\${userId}&name=\${name}\`
+                `ws://localhost:8080/smart-home?user_id=${userId}&name=${name}`
               );
               
               ws.onmessage = handleMessage;
@@ -402,44 +401,44 @@ server = HTTP::Server.new do |context|
             function getDeviceControls(device) {
               switch(device.type) {
                 case 'light':
-                  return \`
+                  return `
                     <div class="device-controls">
-                      <button onclick="updateDevice('\${device.id}', '\${device.status === 'on' ? 'off' : 'on'}')">
-                        \${device.status === 'on' ? 'Apagar' : 'Encender'}
+                      <button onclick="updateDevice('${device.id}', '${device.status === 'on' ? 'off' : 'on'}')">
+                        ${device.status === 'on' ? 'Apagar' : 'Encender'}
                       </button>
-                      \${device.status === 'on' ? \`
-                        <input type="range" min="0" max="100" value="\${device.value || 0}"
-                               onchange="updateDevice('\${device.id}', 'on', this.value)">
-                      \` : ''}
+                      ${device.status === 'on' ? `
+                        <input type="range" min="0" max="100" value="${device.value || 0}"
+                               onchange="updateDevice('${device.id}', 'on', this.value)">
+                      ` : ''}
                     </div>
-                  \`;
+                  `;
                   
                 case 'thermostat':
-                  return \`
+                  return `
                     <div class="device-controls">
-                      <button onclick="updateDevice('\${device.id}', '\${device.status === 'on' ? 'off' : 'on'}')">
-                        \${device.status === 'on' ? 'Apagar' : 'Encender'}
+                      <button onclick="updateDevice('${device.id}', '${device.status === 'on' ? 'off' : 'on'}')">
+                        ${device.status === 'on' ? 'Apagar' : 'Encender'}
                       </button>
-                      \${device.status === 'on' ? \`
-                        <input type="number" min="16" max="30" value="\${device.value || 21}"
-                               onchange="updateDevice('\${device.id}', 'on', this.value)">°C
-                      \` : ''}
+                      ${device.status === 'on' ? `
+                        <input type="number" min="16" max="30" value="${device.value || 21}"
+                               onchange="updateDevice('${device.id}', 'on', this.value)">°C
+                      ` : ''}
                     </div>
-                  \`;
+                  `;
                   
                 case 'lock':
-                  return \`
-                    <button onclick="updateDevice('\${device.id}', '\${device.status === 'locked' ? 'unlocked' : 'locked'}')">
-                      \${device.status === 'locked' ? 'Desbloquear' : 'Bloquear'}
+                  return `
+                    <button onclick="updateDevice('${device.id}', '${device.status === 'locked' ? 'unlocked' : 'locked'}')">
+                      ${device.status === 'locked' ? 'Desbloquear' : 'Bloquear'}
                     </button>
-                  \`;
+                  `;
                   
                 case 'camera':
-                  return \`
-                    <button onclick="updateDevice('\${device.id}', '\${device.status === 'on' ? 'off' : 'on'}')">
-                      \${device.status === 'on' ? 'Apagar' : 'Encender'}
+                  return `
+                    <button onclick="updateDevice('${device.id}', '${device.status === 'on' ? 'off' : 'on'}')">
+                      ${device.status === 'on' ? 'Apagar' : 'Encender'}
                     </button>
-                  \`;
+                  `;
                   
                 default:
                   return '';
@@ -450,11 +449,11 @@ server = HTTP::Server.new do |context|
               // Actualizar escenas
               const scenesDiv = document.getElementById('scenes');
               scenesDiv.innerHTML = Object.values(home.scenes)
-                .map(scene => \`
-                  <div class="scene" onclick="activateScene('\${scene.id}')">
-                    <h3>\${scene.name}</h3>
+                .map(scene => `
+                  <div class="scene" onclick="activateScene('${scene.id}')">
+                    <h3>${scene.name}</h3>
                   </div>
-                \`).join('');
+                `).join('');
               
               // Agrupar dispositivos por habitación
               const rooms = {};
@@ -466,31 +465,31 @@ server = HTTP::Server.new do |context|
               // Actualizar dispositivos por habitación
               const roomsDiv = document.getElementById('rooms');
               roomsDiv.innerHTML = Object.entries(rooms)
-                .map(([room, devices]) => \`
+                .map(([room, devices]) => `
                   <div class="room">
-                    <h2>\${room}</h2>
-                    \${devices.map(device => \`
+                    <h2>${room}</h2>
+                    ${devices.map(device => `
                       <div class="device">
                         <div>
-                          <div>\${device.name}</div>
-                          <div class="status-\${device.status === 'on' ? 'on' : 'off'}">
-                            \${device.status}
-                            \${device.value ? \` (\${device.value}\${device.type === 'thermostat' ? '°C' : '%'})\` : ''}
+                          <div>${device.name}</div>
+                          <div class="status-${device.status === 'on' ? 'on' : 'off'}">
+                            ${device.status}
+                            ${device.value ? ` (${device.value}${device.type === 'thermostat' ? '°C' : '%'})` : ''}
                           </div>
                         </div>
-                        \${getDeviceControls(device)}
+                        ${getDeviceControls(device)}
                       </div>
-                    \`).join('')}
+                    `).join('')}
                   </div>
-                \`).join('');
+                `).join('');
               
               // Actualizar log de actividad
               const logDiv = document.getElementById('activity-log');
               logDiv.innerHTML = home.activity_log
                 .reverse()
-                .map(entry => \`
-                  <div class="log-entry">\${entry}</div>
-                \`).join('');
+                .map(entry => `
+                  <div class="log-entry">${entry}</div>
+                `).join('');
             }
             
             function handleMessage(event) {
@@ -516,4 +515,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

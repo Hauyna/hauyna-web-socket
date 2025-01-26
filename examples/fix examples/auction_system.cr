@@ -5,16 +5,16 @@ require "http/server"
 
 class BaseMessage
   include JSON::Serializable
-  
+
   property type : String
-  
+
   def initialize(@type)
   end
 end
 
 class InitMessage < BaseMessage
   property items : Array(ItemMessage)
-  
+
   def initialize(@items)
     super("init")
   end
@@ -22,7 +22,7 @@ end
 
 class BidUpdateMessage < BaseMessage
   property item : ItemMessage
-  
+
   def initialize(@item)
     super("bid_update")
   end
@@ -30,7 +30,7 @@ end
 
 class TimeUpdateMessage < BaseMessage
   property items : Array(TimeItemMessage)
-  
+
   def initialize(@items)
     super("time_update")
   end
@@ -38,17 +38,17 @@ end
 
 class TimeItemMessage
   include JSON::Serializable
-  
+
   property id : String
   property time : Int32
-  
+
   def initialize(@id, @time)
   end
 end
 
 class ItemMessage
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property description : String
@@ -57,10 +57,10 @@ class ItemMessage
   property highest_bidder : String
   property end_time : Int64
   property status : String
-  
+
   def initialize(@id, @name, @description, @starting_price, @current_price, @highest_bidder, @end_time, @status)
   end
-  
+
   def self.from_item(item : Item)
     new(
       id: item.id,
@@ -77,7 +77,7 @@ end
 
 class ErrorMessage < BaseMessage
   property message : String
-  
+
   def initialize(@message)
     super("error")
   end
@@ -86,7 +86,7 @@ end
 class BidMessage < BaseMessage
   property item_id : String
   property amount : Float64
-  
+
   def initialize(@item_id, @amount)
     super("bid")
   end
@@ -94,7 +94,7 @@ end
 
 class Item
   include JSON::Serializable
-  
+
   property id : String
   property name : String
   property description : String
@@ -103,42 +103,42 @@ class Item
   property highest_bidder : String?
   property end_time : Time
   property status : String # active, ended
-  
+
   def initialize(@id : String, @name : String, @description : String, @starting_price : Float64)
     @current_price = @starting_price
     @highest_bidder = nil
     @end_time = Time.local + 5.minutes
     @status = "active"
   end
-  
+
   def to_json_object : Hash(String, String | Float64 | Int64)
     {
-      "id" => @id,
-      "name" => @name,
-      "description" => @description,
+      "id"             => @id,
+      "name"           => @name,
+      "description"    => @description,
       "starting_price" => @starting_price,
-      "current_price" => @current_price,
+      "current_price"  => @current_price,
       "highest_bidder" => @highest_bidder || "",
-      "end_time" => @end_time.to_unix.to_i64,
-      "status" => @status
+      "end_time"       => @end_time.to_unix.to_i64,
+      "status"         => @status,
     }
   end
-  
+
   def time_update_object : Hash(String, String | Int32)
     {
-      "id" => @id,
-      "time" => time_remaining
+      "id"   => @id,
+      "time" => time_remaining,
     }
   end
-  
+
   def place_bid(amount : Float64, bidder : String) : Bool
     return false if amount <= @current_price || Time.local > @end_time || @status != "active"
-    
+
     @current_price = amount
     @highest_bidder = bidder
     true
   end
-  
+
   def time_remaining : Int32
     remaining = (@end_time - Time.local).total_seconds.to_i
     remaining > 0 ? remaining : 0
@@ -160,7 +160,7 @@ end
 items = [
   Item.new("1", "Reloj Antiguo", "Reloj de péndulo del siglo XIX", 100.0),
   Item.new("2", "Pintura al Óleo", "Paisaje marino original", 500.0),
-  Item.new("3", "Moneda Coleccionable", "Denario romano en buen estado", 250.0)
+  Item.new("3", "Moneda Coleccionable", "Denario romano en buen estado", 250.0),
 ]
 
 server = HTTP::Server.new do |context|
@@ -186,7 +186,7 @@ server = HTTP::Server.new do |context|
         if data["type"]?.try(&.as_s) == "bid"
           item_id = data["item_id"].as_s
           amount = data["amount"].as_f
-          
+
           if item = items.find { |i| i.id == item_id }
             if item.place_bid(amount, bidder_id)
               item.broadcast_update("bid_update")
@@ -213,17 +213,17 @@ server = HTTP::Server.new do |context|
           item.broadcast_update("auction_ended")
         end
       end
-      
+
       time_items = items.map { |item| TimeItemMessage.new(item.id, item.time_remaining) }
       message = TimeUpdateMessage.new(time_items)
       Hauyna::WebSocket::Events.send_to_group("bidders", message.to_json)
-      
+
       sleep 1.seconds
     end
   end
 
   router.websocket("/auction", handler)
-  
+
   next if router.call(context)
 
   if context.request.path == "/"
@@ -281,64 +281,64 @@ server = HTTP::Server.new do |context|
 
           <script>
             const bidderId = Math.random().toString(36).substr(2, 9);
-            const ws = new WebSocket(\`ws://localhost:8080/auction?bidder_id=\${bidderId}\`);
+            const ws = new WebSocket(`ws://localhost:8080/auction?bidder_id=${bidderId}`);
             const items = document.getElementById('items');
             const error = document.getElementById('error');
 
             function formatTime(seconds) {
               const mins = Math.floor(seconds / 60);
               const secs = seconds % 60;
-              return \`\${mins}:\${secs.toString().padStart(2, '0')}\`;
+              return `${mins}:${secs.toString().padStart(2, '0')}`;
             }
 
             function updateItem(item) {
-              const itemElement = document.getElementById(\`item-\${item.id}\`);
+              const itemElement = document.getElementById(`item-${item.id}`);
               if (itemElement) {
-                itemElement.className = \`item \${item.status}\`;
+                itemElement.className = `item ${item.status}`;
                 const currentPrice = typeof item.current_price === 'string' ? 
                   parseFloat(item.current_price) : item.current_price;
                 
                 itemElement.querySelector('.price').textContent = 
-                  \`Precio actual: $\${currentPrice.toFixed(2)}\`;
+                  `Precio actual: $${currentPrice.toFixed(2)}`;
                   
                 const highestBidder = item.highest_bidder === "" ? null : item.highest_bidder;
                 itemElement.querySelector('.highest-bidder').textContent = 
-                  highestBidder ? \`Mayor postor: \${highestBidder === bidderId ? 'Tú' : highestBidder}\` : '';
+                  highestBidder ? `Mayor postor: ${highestBidder === bidderId ? 'Tú' : highestBidder}` : '';
               }
             }
 
             function createItemElement(item) {
               const div = document.createElement('div');
-              div.id = \`item-\${item.id}\`;
-              div.className = \`item \${item.status}\`;
+              div.id = `item-${item.id}`;
+              div.className = `item ${item.status}`;
               
               const currentPrice = typeof item.current_price === 'string' ? 
                 parseFloat(item.current_price) : item.current_price;
               const highestBidder = item.highest_bidder === "" ? null : item.highest_bidder;
               
-              div.innerHTML = \`
-                <h2>\${item.name}</h2>
-                <p>\${item.description}</p>
-                <div class="price">Precio actual: $\${currentPrice.toFixed(2)}</div>
-                <div class="highest-bidder">\${
+              div.innerHTML = `
+                <h2>${item.name}</h2>
+                <p>${item.description}</p>
+                <div class="price">Precio actual: $${currentPrice.toFixed(2)}</div>
+                <div class="highest-bidder">${
                   highestBidder ? 
-                    \`Mayor postor: \${highestBidder === bidderId ? 'Tú' : highestBidder}\` : 
+                    `Mayor postor: ${highestBidder === bidderId ? 'Tú' : highestBidder}` : 
                     ''
                 }</div>
-                <div class="timer" id="timer-\${item.id}"></div>
-                \${item.status === 'active' ? \`
+                <div class="timer" id="timer-${item.id}"></div>
+                ${item.status === 'active' ? `
                   <div class="bid-form">
-                    <input type="number" step="0.01" min="\${currentPrice + 0.01}" 
-                           id="bid-\${item.id}" placeholder="Tu puja">
-                    <button onclick="placeBid('\${item.id}')">Pujar</button>
+                    <input type="number" step="0.01" min="${currentPrice + 0.01}" 
+                           id="bid-${item.id}" placeholder="Tu puja">
+                    <button onclick="placeBid('${item.id}')">Pujar</button>
                   </div>
-                \` : ''}
-              \`;
+                ` : ''}
+              `;
               return div;
             }
 
             function placeBid(itemId) {
-              const input = document.getElementById(\`bid-\${itemId}\`);
+              const input = document.getElementById(`bid-${itemId}`);
               const amount = parseFloat(input.value);
               if (!isNaN(amount) && amount > 0) {
                 ws.send(JSON.stringify({
@@ -371,23 +371,23 @@ server = HTTP::Server.new do |context|
                   
                 case 'auction_ended':
                   updateItem(data.item);
-                  const itemElement = document.getElementById(\`item-\${data.item.id}\`);
+                  const itemElement = document.getElementById(`item-${data.item.id}`);
                   if (itemElement) {
                     const winner = data.item.highest_bidder === bidderId ? 'Tú' : data.item.highest_bidder;
                     itemElement.querySelector('.bid-form')?.remove();
-                    itemElement.insertAdjacentHTML('beforeend', \`
+                    itemElement.insertAdjacentHTML('beforeend', `
                       <div class="winner">
-                        ¡Subasta terminada! Ganador: \${winner}
+                        ¡Subasta terminada! Ganador: ${winner}
                       </div>
-                    \`);
+                    `);
                   }
                   break;
                   
                 case 'time_update':
                   data.items.forEach(item => {
-                    const timer = document.getElementById(\`timer-\${item.id}\`);
+                    const timer = document.getElementById(`timer-${item.id}`);
                     if (timer) {
-                      timer.textContent = \`Tiempo restante: \${formatTime(item.time)}\`;
+                      timer.textContent = `Tiempo restante: ${formatTime(item.time)}`;
                     }
                   });
                   break;
@@ -406,4 +406,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

@@ -6,9 +6,9 @@ Hauyna::WebSocket::Events.on("user_typing") do |socket, data|
   if room = data["room"]?.try(&.as_s)
     if user = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
       Hauyna::WebSocket::Events.send_to_group(room, {
-        type: "user_typing",
-        user: user,
-        status: data["status"]
+        type:   "user_typing",
+        user:   user,
+        status: data["status"],
       }.to_json)
     end
   end
@@ -22,7 +22,7 @@ Hauyna::WebSocket::Events.on("change_room") do |socket, data|
       Hauyna::WebSocket::Events.send_to_group(old_room, {
         type: "user_left_room",
         user: user,
-        room: old_room
+        room: old_room,
       }.to_json)
     end
 
@@ -32,7 +32,7 @@ Hauyna::WebSocket::Events.on("change_room") do |socket, data|
       Hauyna::WebSocket::Events.send_to_group(new_room, {
         type: "user_joined_room",
         user: user,
-        room: new_room
+        room: new_room,
       }.to_json)
     end
   end
@@ -44,24 +44,24 @@ Hauyna::WebSocket::Events.on("join_room") do |socket, data|
     if room = data["room"]?.try(&.as_s)
       # Agregar usuario a la sala
       Hauyna::WebSocket::ConnectionManager.add_to_group(user, room)
-      
+
       # Obtener lista de usuarios en la sala
       members = Hauyna::WebSocket::ConnectionManager.get_group_members(room)
-      
+
       # Notificar al usuario que se unió
       socket.send({
-        type: "room_joined",
-        room: room,
-        users: members.to_a,
-        online_users: members.size
+        type:         "room_joined",
+        room:         room,
+        users:        members.to_a,
+        online_users: members.size,
       }.to_json)
 
       # Notificar a otros usuarios
       Hauyna::WebSocket::Events.send_to_group(room, {
-        type: "user_joined",
-        user: user,
-        room: room,
-        online_users: members.size
+        type:         "user_joined",
+        user:         user,
+        room:         room,
+        online_users: members.size,
       }.to_json)
     end
   end
@@ -101,32 +101,32 @@ handler = Hauyna::WebSocket::Handler.new(
            else
              "lobby"
            end
-    
+
     if user_id
       # Registrar usuario en la sala
       Hauyna::WebSocket::ConnectionManager.add_to_group(user_id, room)
-      
+
       # Obtener lista de usuarios actual
       members = Hauyna::WebSocket::ConnectionManager.get_group_members(room)
-      
+
       # Enviar mensaje de bienvenida al usuario con la lista de usuarios
       socket.send({
-        type: "welcome",
-        message: "¡Bienvenido al chat!",
-        user_id: user_id,
-        room: room,
-        users: members.to_a, # Convertir el Set a Array
-        online_users: members.size
+        type:         "welcome",
+        message:      "¡Bienvenido al chat!",
+        user_id:      user_id,
+        room:         room,
+        users:        members.to_a, # Convertir el Set a Array
+        online_users: members.size,
       }.to_json)
 
       # Notificar a otros usuarios
       Hauyna::WebSocket::Events.send_to_group(room, {
-        type: "user_joined",
-        user: user_id,
-        room: room,
-        users: members.to_a, # Convertir el Set a Array
-        timestamp: Time.local.to_unix,
-        online_users: members.size
+        type:         "user_joined",
+        user:         user_id,
+        room:         room,
+        users:        members.to_a, # Convertir el Set a Array
+        timestamp:    Time.local.to_unix,
+        online_users: members.size,
       }.to_json)
     end
   },
@@ -134,22 +134,22 @@ handler = Hauyna::WebSocket::Handler.new(
   # Manejar mensajes recibidos
   on_message: ->(socket : HTTP::WebSocket, data : JSON::Any) {
     user_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
-    
+
     case data["type"]?.try(&.as_s)
     when "chat_message"
       if room = data["room"]?.try(&.as_s)
         # Verificar que el usuario está en la sala
         if Hauyna::WebSocket::ConnectionManager.is_in_group?(user_id, room)
           members = Hauyna::WebSocket::ConnectionManager.get_group_members(room)
-          
+
           # Enviar mensaje a todos en la sala, incluyendo el remitente
           Hauyna::WebSocket::Events.send_to_group(room, {
-            type: "chat_message",
-            user: user_id,
-            room: room,
-            message: data["message"]?.try(&.as_s) || "",
-            timestamp: Time.local.to_unix,
-            online_users: members.size
+            type:         "chat_message",
+            user:         user_id,
+            room:         room,
+            message:      data["message"]?.try(&.as_s) || "",
+            timestamp:    Time.local.to_unix,
+            online_users: members.size,
           }.to_json)
         end
       end
@@ -157,20 +157,20 @@ handler = Hauyna::WebSocket::Handler.new(
       if recipient = data["to"]?.try(&.as_s)
         # Enviar al destinatario
         Hauyna::WebSocket::Events.send_to_one(recipient, {
-          type: "private_message",
-          from: user_id,
-          to: recipient,
-          message: data["message"]?.try(&.as_s) || "",
-          timestamp: Time.local.to_unix
+          type:      "private_message",
+          from:      user_id,
+          to:        recipient,
+          message:   data["message"]?.try(&.as_s) || "",
+          timestamp: Time.local.to_unix,
         }.to_json)
-        
+
         # Enviar copia al remitente
         socket.send({
-          type: "private_message",
-          from: user_id,
-          to: recipient,
-          message: data["message"]?.try(&.as_s) || "",
-          timestamp: Time.local.to_unix
+          type:      "private_message",
+          from:      user_id,
+          to:        recipient,
+          message:   data["message"]?.try(&.as_s) || "",
+          timestamp: Time.local.to_unix,
         }.to_json)
       end
     when "join_room", "change_room", "user_typing"
@@ -190,10 +190,10 @@ handler = Hauyna::WebSocket::Handler.new(
       Hauyna::WebSocket::ConnectionManager.get_user_groups(user_id).each do |room|
         members = Hauyna::WebSocket::ConnectionManager.get_group_members(room)
         Hauyna::WebSocket::Events.send_to_group(room, {
-          type: "user_left",
-          user: user_id,
-          timestamp: Time.local.to_unix,
-          online_users: members.size - 1
+          type:         "user_left",
+          user:         user_id,
+          timestamp:    Time.local.to_unix,
+          online_users: members.size - 1,
         }.to_json)
       end
     end
@@ -235,4 +235,4 @@ begin
 rescue ex
   puts "Error iniciando el servidor: #{ex.message}"
   exit(1)
-end 
+end

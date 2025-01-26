@@ -36,7 +36,7 @@ server = HTTP::Server.new do |context|
 
   # Registrar la ruta del WebSocket
   router.websocket("/chat", handler)
-  
+
   # Intentar manejar la conexión WebSocket
   next if router.call(context)
 
@@ -86,4 +86,4 @@ server = HTTP::Server.new do |context|
 end
 
 puts "Servidor iniciado en http://localhost:8080"
-server.listen("0.0.0.0", 8080) 
+server.listen("0.0.0.0", 8080)

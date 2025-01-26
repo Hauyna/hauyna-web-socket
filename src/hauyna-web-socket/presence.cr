@@ -64,8 +64,8 @@ module Hauyna
       # Obtiene usuarios en un canal específico
       def self.in_channel(channel : String) : Array(String)
         @@mutex.synchronize do
-          @@presence.select { |_, meta| 
-            meta["channel"]? == JSON::Any.new(channel) 
+          @@presence.select { |_, meta|
+            meta["channel"]? == JSON::Any.new(channel)
           }.keys
         end
       end
@@ -73,8 +73,8 @@ module Hauyna
       # Obtiene usuarios en un grupo específico
       def self.in_group(group : String) : Array(String)
         @@mutex.synchronize do
-          @@presence.select { |_, meta| 
-            meta["group"]? == JSON::Any.new(group) 
+          @@presence.select { |_, meta|
+            meta["group"]? == JSON::Any.new(group)
           }.keys
         end
       end
@@ -139,10 +139,10 @@ module Hauyna
 
       private def self.broadcast_presence_change(event : String, identifier : String, metadata : Hash(String, JSON::Any))
         message = {
-          type: "presence_change",
-          event: event,
-          user: identifier,
-          metadata: metadata
+          type:     "presence_change",
+          event:    event,
+          user:     identifier,
+          metadata: metadata,
         }.to_json
 
         # Broadcast general
@@ -155,4 +155,4 @@ module Hauyna
       end
     end
   end
-end 
+end

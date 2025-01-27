@@ -29,8 +29,13 @@ module Hauyna
       private def check_timeout(socket)
         if last = @last_pong[socket]?
           if Time.local - last > @timeout
-            # 1001 es el código para "Going Away"
-            socket.close(1001, "Heartbeat timeout")
+            # Intentar transición a Disconnected
+            if ConnectionManager.set_connection_state(socket, ConnectionState::Disconnected)
+              socket.close(1001, "Heartbeat timeout")
+            end
+          elsif Time.local - last > @interval * 2
+            # Intentar transición a Idle
+            ConnectionManager.set_connection_state(socket, ConnectionState::Idle)
           end
         end
       end

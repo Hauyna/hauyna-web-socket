@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0] - 2024-XX-XX
+## [1.0.0] - 2025-01-26
 
 ### Added
 - Sistema de canales para comunicación en tiempo real
@@ -59,18 +59,42 @@
   - Contexto HTTP básico
   - Manejo de upgrade WebSocket
 
+- Sistema de estados de conexión
+  - Estados detallados (Connected, Disconnected, Reconnecting, Error, Idle)
+  - Timestamps de cambios de estado
+  - Notificaciones automáticas de cambios
+  - Transiciones de estado validadas
+  - Hooks para cambios de estado
+  - Transiciones personalizables
+  - Manejo seguro de transiciones inválidas
+  - Integración con heartbeat y manejo de errores
+  - Políticas de reintento configurables
+  - Backoff exponencial con jitter
+  - Límites de reintentos personalizables
+
 ### Security
 - Validación de mensajes entrantes
 - Timeouts configurables
 - Limpieza automática de recursos
 - Manejo básico de grupos y canales
 - Validación de conexiones WebSocket
+- Validación de estados de conexión
+- Manejo seguro de transiciones de estado
+- Limpieza automática de estados obsoletos
+- Validación de transiciones de estado
+- Manejo seguro de hooks de estado
+- Protección contra transiciones inválidas
 
 ### Performance
 - Operaciones thread-safe básicas
 - Broadcast optimizado
 - Manejo asíncrono de eventos
 - Mutex para operaciones críticas
+- Operaciones de estado thread-safe
+- Manejo asíncrono de notificaciones de estado
+- Optimización de consultas de estado
+- Hooks asíncronos para cambios de estado
+- Validación eficiente de transiciones
 
 ### Documentation
 - README con ejemplos básicos

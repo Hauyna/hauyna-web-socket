@@ -71,6 +71,12 @@
 - **Mensajes Directos**: Envía mensajes a usuarios específicos
 - **Broadcast**: Envía mensajes a todos los usuarios o grupos
 - **Limpieza Automática**: Gestión de desconexiones y limpieza de recursos
+- **Estados de Conexión**: Monitoreo detallado del estado de cada conexión
+- **Timestamps de Estado**: Seguimiento temporal de cambios de estado
+- **Notificaciones de Estado**: Eventos automáticos de cambio de estado
+- **Transiciones de Estado**: Sistema validado de cambios de estado
+- **Hooks de Estado**: Callbacks personalizables para cambios de estado
+- **Estados Personalizables**: API para definir transiciones válidas
 
 ### Sistema de Eventos
 - **Eventos Personalizados**: Define y maneja eventos específicos de la aplicación
@@ -198,6 +204,42 @@ graph LR
         Messages -->|Broadcast| Clients[Clientes]
     end
 ```
+
+## Estados de Conexión
+```crystal
+# Verificar estado actual de una conexión
+if state = ConnectionManager.get_connection_state(socket)
+  case state
+  when ConnectionState::Connected
+    puts "Socket conectado y activo"
+  when ConnectionState::Idle
+    puts "Socket inactivo"
+  when ConnectionState::Error
+    puts "Socket con error"
+  when ConnectionState::Disconnected
+    puts "Socket desconectado"
+  when ConnectionState::Reconnecting
+    puts "Socket en proceso de reconexión"
+  end
+end
+
+# Obtener sockets por estado
+idle_sockets = ConnectionManager.connections_in_state(ConnectionState::Idle)
+puts "Hay #{idle_sockets.size} conexiones inactivas"
+
+# Verificar tiempo en estado actual
+if timestamp = ConnectionManager.get_state_timestamp(socket)
+  time_in_state = Time.local - timestamp
+  puts "Socket ha estado en este estado por #{time_in_state.total_seconds} segundos"
+end
+```
+
+### Estados Disponibles
+- `Connected`: Socket conectado y funcionando normalmente
+- `Disconnected`: Socket desconectado del servidor
+- `Reconnecting`: Socket en proceso de reconexión
+- `Error`: Socket en estado de error
+- `Idle`: Socket conectado pero sin actividad reciente
 
 ## Instalación
 
@@ -610,6 +652,91 @@ def manage_user_groups(user_id : String)
   if ConnectionManager.is_in_group?(user_id, "admins")
     # Realizar acciones administrativas
   end
+end
+```
+
+## Ejemplo de Manejo de Estados y Transiciones
+```crystal
+# Configurar política de reintentos personalizada
+retry_policy = ConnectionManager::RetryPolicy.new(
+  max_attempts: 5,
+  base_delay: 1.seconds,
+  max_delay: 30.seconds,
+  backoff_multiplier: 2.0,
+  jitter: 0.1
+)
+
+# Asignar política al socket
+ConnectionManager.set_retry_policy(socket, retry_policy)
+
+# Registrar un hook para monitorear cambios de estado
+ConnectionManager.on_state_change do |socket, old_state, new_state|
+  puts "Socket #{socket.object_id} cambió de #{old_state} a #{new_state}"
+  
+  # Monitorear reintentos
+  if new_state == ConnectionState::Reconnecting
+    puts "Intentando reconexión..."
+  elsif new_state == ConnectionState::Connected
+    puts "Reconexión exitosa!"
+  end
+end
+```
+
+### Políticas de Reintento
+```crystal
+# Política con backoff exponencial y jitter
+policy = ConnectionManager::RetryPolicy.new(
+  max_attempts: 5,        # Máximo número de intentos
+  base_delay: 1.seconds,  # Delay inicial
+  max_delay: 30.seconds,  # Delay máximo
+  backoff_multiplier: 2.0,# Multiplicador de backoff
+  jitter: 0.1            # Factor de aleatoriedad
+)
+
+# Los delays resultantes serían aproximadamente:
+# Intento 1: ~1 segundo
+# Intento 2: ~2 segundos
+# Intento 3: ~4 segundos
+# Intento 4: ~8 segundos
+# Intento 5: ~16 segundos
+```
+
+### Configuración de Políticas de Reintento
+```crystal
+# Política con backoff exponencial y jitter
+policy = ConnectionManager::RetryPolicy.new(
+  max_attempts: 5,        # Máximo número de intentos
+  base_delay: 1.seconds,  # Delay inicial
+  max_delay: 30.seconds,  # Delay máximo
+  backoff_multiplier: 2.0,# Multiplicador de backoff
+  jitter: 0.1            # Factor de aleatoriedad
+)
+
+# Ejemplo de uso con diferentes configuraciones
+
+# Política agresiva (reintentos rápidos)
+aggressive_policy = ConnectionManager::RetryPolicy.new(
+  max_attempts: 10,
+  base_delay: 0.5.seconds,
+  max_delay: 5.seconds,
+  backoff_multiplier: 1.5,
+  jitter: 0.05
+)
+
+# Política conservadora (reintentos más espaciados)
+conservative_policy = ConnectionManager::RetryPolicy.new(
+  max_attempts: 3,
+  base_delay: 5.seconds,
+  max_delay: 60.seconds,
+  backoff_multiplier: 3.0,
+  jitter: 0.2
+)
+
+# Asignar política según el tipo de conexión
+if is_critical_connection
+  ConnectionManager.set_retry_policy(socket, aggressive_policy)
+else
+  ConnectionManager.set_retry_policy(socket, conservative_policy)
 end
 ```
 

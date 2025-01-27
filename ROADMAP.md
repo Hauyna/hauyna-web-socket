@@ -9,14 +9,13 @@
   - [ ] Pruebas de concurrencia
 
 - [ ] Estabilidad y Errores
-  - [ ] Mejor manejo de errores de conexión
+  - [x] Mejor manejo de errores de conexión
   - [x] Manejo mejorado de desconexiones y reconexiones
-  - [ ] Estados de conexión detallados
-
-- [ ] Documentación Esencial
-  - [ ] Documentación API completa
-  - [ ] Ejemplos de implementación básicos
-  - [ ] Guías de inicio rápido
+  - [x] Estados de conexión detallados
+  - [x] Transiciones de estado personalizables
+  - [x] Hooks para cambios de estado
+  - [x] Políticas de reintentos personalizables
+  - [ ] Logging avanzado de transiciones
 
 ### Mejoras de Sistema Base
 - [ ] Sistema de eventos mejorado
@@ -27,7 +26,9 @@
 - [ ] Mejoras de Performance
   - [ ] Optimización de broadcast para grupos
   - [ ] Manejo optimizado de memoria
-  - [ ] Métricas básicas de rendimiento
+  - [ ] Métricas de estado de conexiones
+  - [ ] Estadísticas de tiempo en cada estado
+  - [ ] Alertas por umbrales de estado
 
 ## Versión [1.2.0]
 
@@ -36,16 +37,17 @@
   - [ ] Middleware de compresión
   - [ ] Middleware de rate limiting
   - [ ] Middleware de logging
-
-- [ ] Mejoras de Heartbeat
-  - [ ] Reconexión automática inteligente
-  - [ ] Backoff exponencial configurable
-  - [ ] Heartbeat adaptativo según carga
+- [ ] Estados de conexión avanzados
+  - [ ] Estados personalizables
+  - [ ] Máquina de estados configurable
+  - [ ] Políticas de transición
 
 ### Mejoras de Seguridad
 - [ ] Rate limiting por conexión
 - [ ] Validación de origen de conexiones
 - [ ] Opciones de seguridad configurables
+- [ ] Validación de transiciones de estado
+- [ ] Auditoría de cambios de estado
 
 ## Versión [2.0.0]
 
@@ -53,6 +55,10 @@
 - [ ] Soporte para WebSocket sobre HTTP/2
 - [ ] Protocolo de mensajería binaria
 - [ ] Compresión per-message
+- [ ] Sistema de estados distribuido
+  - [ ] Sincronización de estados entre nodos
+  - [ ] Persistencia de estados
+  - [ ] Recuperación de estados
 
 ### Mejoras de Sistema
 - [ ] Canales mejorados
@@ -64,13 +70,10 @@
   - [ ] Estados personalizables
   - [ ] Timeouts configurables
   - [ ] Eventos detallados
-
-### Extensibilidad
-- [ ] Hooks para eventos clave
-  - [ ] Hooks de conexión
-  - [ ] Hooks de mensajes
-  - [ ] Hooks de canales
-  - [ ] Hooks de presencia
+- [ ] Integración avanzada de estados
+  - [ ] Estados por canal
+  - [ ] Estados por grupo
+  - [ ] Estados jerárquicos
 
 ## Mejoras Continuas
 

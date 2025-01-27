@@ -60,6 +60,9 @@ module Hauyna
         end
 
         socket.on_message do |message|
+          # Intentar transición a Connected
+          ConnectionManager.set_connection_state(socket, ConnectionState::Connected)
+          
           if message_proc = @on_message
             begin
               parsed_message = JSON.parse(message)
@@ -104,6 +107,8 @@ module Hauyna
         end
 
         socket.on_close do
+          # Intentar transición a Disconnected
+          ConnectionManager.set_connection_state(socket, ConnectionState::Disconnected)
           if close_proc = @on_close
             close_proc.call(socket)
           end
@@ -124,6 +129,12 @@ module Hauyna
           if pong_proc = @on_pong
             pong_proc.call(socket, message)
           end
+        end
+
+        socket.on_error do |error|
+          # Intentar transición a Error
+          ConnectionManager.set_connection_state(socket, ConnectionState::Error)
+          ErrorHandler.handle(socket, error)
         end
 
         if heartbeat = @heartbeat

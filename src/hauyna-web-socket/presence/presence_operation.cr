@@ -1,6 +1,6 @@
 module Hauyna
   module WebSocket
-    class Presence
+    module Presence
       private class PresenceOperation
         # Definir los tipos específicos para cada operación
         alias TrackData = NamedTuple(

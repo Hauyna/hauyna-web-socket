@@ -1,27 +1,19 @@
 module Hauyna
   module WebSocket
-    class Presence
+    module Presence
       @@presence = {} of String => Hash(String, JSON::Any)
       @@operation_channel = ::Channel(PresenceOperation).new
+      @@mutex = Mutex.new
 
       # Iniciar el procesador de operaciones
       spawn do
         loop do
           operation = @@operation_channel.receive
-          case operation.type
-          when :track
-            data = operation.data.as(PresenceOperation::TrackData)
-            internal_track(data[:identifier], data[:metadata])
-          when :untrack
-            data = operation.data.as(PresenceOperation::UntrackData)
-            internal_untrack(data[:identifier])
-          when :update
-            data = operation.data.as(PresenceOperation::UpdateData)
-            internal_update(data[:identifier], data[:metadata])
-          end
+          process_operation(operation)
         end
       end
 
+      # API pública
       def self.track(identifier : String, metadata : Hash(String, JSON::Any))
         @@operation_channel.send(
           PresenceOperation.new(:track, {
@@ -46,6 +38,19 @@ module Hauyna
             metadata: metadata
           }.as(PresenceOperation::UpdateData))
         )
+      end
+
+      private def self.process_operation(operation : PresenceOperation)
+        @@mutex.synchronize do
+          case operation.type
+          when :track
+            internal_track(operation.identifier, operation.metadata)
+          when :untrack
+            internal_untrack(operation.identifier)
+          when :update
+            internal_update(operation.identifier, operation.metadata)
+          end
+        end
       end
     end
   end

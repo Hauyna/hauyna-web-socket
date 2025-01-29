@@ -1,62 +1,112 @@
 module Hauyna
   module WebSocket
-    class Presence
-      def self.list(channel : String? = nil, group : String? = nil) : Hash(String, Hash(String, JSON::Any))
-        @@presence.select { |_, meta| meta["channel"]? == JSON::Any.new(channel) }
+    module Presence
+      # Métodos de consulta protegidos por mutex
+      def self.list : Hash(String, Hash(String, JSON::Any))
+        @@mutex.synchronize do
+          @@presence.dup
+        end
+      end
+
+      def self.list_by_channel(channel : String) : Hash(String, Hash(String, JSON::Any))
+        @@mutex.synchronize do
+          @@presence.select do |_, data|
+            data["channel"]?.try(&.as_s) == channel
+          end
+        end
       end
 
       def self.list_by(criteria : Hash(String, String)) : Hash(String, Hash(String, JSON::Any))
-        @@presence.select do |_, meta|
-          criteria.all? do |key, value|
-            meta[key]? == JSON::Any.new(value)
-          end
+        @@mutex.synchronize do
+          @@presence.select do |_, data|
+            criteria.all? do |key, value|
+              data[key]?.try(&.as_s) == value
+            end
+          end.dup
         end
       end
 
-      def self.present_in?(identifier : String, context : Hash(String, String)) : Bool
-        if metadata = @@presence[identifier]?
-          context.all? do |key, value|
-            metadata[key]? == JSON::Any.new(value)
-          end
-        else
-          false
+      def self.list_by(metadata_key : String, metadata_value : String) : Hash(String, Hash(String, JSON::Any))
+        @@mutex.synchronize do
+          list_by({metadata_key => metadata_value}).dup
         end
       end
 
-      def self.count_by(context : Hash(String, String)? = nil) : Int32
-        if context
-          list_by(context).size
-        else
-          @@presence.size
+      def self.get_metadata(identifier : String) : Hash(String, JSON::Any)?
+        @@mutex.synchronize do
+          @@presence[identifier]?.try(&.dup)
+        end
+      end
+
+      def self.present?(identifier : String) : Bool
+        @@mutex.synchronize do
+          @@presence.has_key?(identifier)
+        end
+      end
+
+      def self.present_in?(channel : String, identifier : String) : Bool
+        @@mutex.synchronize do
+          if data = @@presence[identifier]?
+            data["channel"]?.try(&.as_s) == channel
+          else
+            false
+          end
         end
       end
 
       def self.in_channel(channel : String) : Array(String)
-        @@presence.select { |_, meta|
-          meta["channel"]? == JSON::Any.new(channel)
-        }.keys
+        @@mutex.synchronize do
+          @@presence.select do |_, data|
+            data["channel"]?.try(&.as_s) == channel
+          end.keys.to_a
+        end
       end
 
       def self.in_group(group : String) : Array(String)
-        @@presence.select { |_, meta|
-          meta["group"]? == JSON::Any.new(group)
-        }.keys
+        @@mutex.synchronize do
+          @@presence.select do |_, data|
+            data["group"]?.try(&.as_s) == group
+          end.keys.to_a
+        end
       end
 
-      def self.get_state(identifier : String) : Hash(String, JSON::Any)?
-        @@presence[identifier]?
-      end
-
-      def self.get_presence(identifier : String) : Hash(String, JSON::Any)?
-        @@presence[identifier]?
-      end
-
-      def self.present?(identifier : String) : Bool
-        @@presence.has_key?(identifier)
+      def self.count_by(context : Hash(String, String)? = nil) : Int32
+        @@mutex.synchronize do
+          if context
+            @@presence.count do |_, data|
+              context.all? do |key, value|
+                data[key]?.try(&.as_s) == value
+              end
+            end
+          else
+            @@presence.size
+          end
+        end
       end
 
       def self.count : Int32
-        @@presence.size
+        @@mutex.synchronize do
+          @@presence.size
+        end
+      end
+
+      def self.count_by_channel(channel : String) : Int32
+        @@mutex.synchronize do
+          @@presence.count do |_, data|
+            data["channel"]?.try(&.as_s) == channel
+          end
+        end
+      end
+
+      def self.get_presence(identifier : String) : Hash(String, JSON::Any)?
+        @@mutex.synchronize do
+          @@presence[identifier]?.try(&.dup)
+        end
+      end
+
+      # Alias para mantener compatibilidad
+      def self.get_state(identifier : String) : Hash(String, JSON::Any)?
+        get_presence(identifier)
       end
     end
   end

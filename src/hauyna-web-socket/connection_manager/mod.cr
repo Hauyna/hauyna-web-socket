@@ -1,12 +1,13 @@
 require "../error_handler"
 require "../logging"
+require "./state_management"  # Primero cargamos las definiciones de estado
+require "./state_operation"
 require "./base"
 require "./operations"
 require "./group_management"
 require "./internal_methods"
 require "./public_api"
 require "./retry_policy"
-require "./state_management"
 
 module Hauyna
   module WebSocket

@@ -13,7 +13,10 @@ module Hauyna
       @@state_timestamps = {} of HTTP::WebSocket => Time
       @@retry_policies = {} of HTTP::WebSocket => RetryPolicy
       @@retry_attempts = {} of HTTP::WebSocket => Int32
-      @@state_hooks = {} of Symbol => Array(Proc(HTTP::WebSocket, ConnectionState, ConnectionState, Nil))
+      @@state_hooks = {} of Symbol => Array(Proc(HTTP::WebSocket, ConnectionState?, ConnectionState, Nil))
+      
+      # Mutex para sincronización
+      @@mutex = Mutex.new
       
       # Configuración global
       class_property default_retry_policy : RetryPolicy = RetryPolicy.new

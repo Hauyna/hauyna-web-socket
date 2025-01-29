@@ -1,15 +1,27 @@
 module Hauyna
   module WebSocket
     class Channel
+      # Operación específica para cleanup
+      private class CleanupOperation
+        getter socket : HTTP::WebSocket
+        def initialize(@socket)
+        end
+      end
+
       @@channels = {} of String => Set(Subscription)
-      @@operation_channel = ::Channel(ChannelOperation).new
+      @@operation_channel = ::Channel(ChannelOperation | CleanupOperation).new
       @@mutex = Mutex.new
 
       # Iniciar el procesador de operaciones
       spawn do
         loop do
           operation = @@operation_channel.receive
-          process_operation(operation)
+          case operation
+          when ChannelOperation
+            process_operation(operation)
+          when CleanupOperation
+            process_cleanup(operation)
+          end
         end
       end
 
@@ -30,6 +42,28 @@ module Hauyna
       rescue ex
         puts "ERROR procesando operación: #{ex.message}"
         puts ex.backtrace.join("\n")
+      end
+
+      private def self.process_cleanup(operation : CleanupOperation)
+        channels_to_cleanup = [] of String
+        
+        @@mutex.synchronize do
+          @@channels.each do |channel, subs|
+            if subs.any? { |s| s.socket == operation.socket }
+              channels_to_cleanup << channel
+            end
+          end
+        end
+
+        # Procesar unsubscribe para cada canal fuera del lock principal
+        channels_to_cleanup.each do |channel|
+          @@operation_channel.send(
+            ChannelOperation.new(:unsubscribe, {
+              channel: channel,
+              socket: operation.socket
+            }.as(ChannelOperation::UnsubscribeData))
+          )
+        end
       end
 
       # API pública
@@ -70,19 +104,27 @@ module Hauyna
 
       # Métodos de consulta
       def self.subscription_count(channel : String) : Int32
-        @@channels[channel]?.try(&.size) || 0
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.size) || 0
+        end
       end
 
       def self.subscribers(channel : String) : Array(String)
-        @@channels[channel]?.try(&.map(&.identifier).to_a) || [] of String
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.map(&.identifier).to_a) || [] of String
+        end
       end
 
       def self.subscribed?(channel : String, socket : HTTP::WebSocket) : Bool
-        @@channels[channel]?.try(&.any? { |s| s.socket == socket }) || false
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.any? { |s| s.socket == socket }) || false
+        end
       end
 
       def self.get_subscription_metadata(channel : String, socket : HTTP::WebSocket) : Hash(String, JSON::Any)?
-        @@channels[channel]?.try(&.find { |s| s.socket == socket }).try(&.metadata)
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.find { |s| s.socket == socket }).try(&.metadata)
+        end
       end
 
       def self.presence_data(channel : String) : Hash(String, JSON::Any)
@@ -126,23 +168,19 @@ module Hauyna
       end
 
       def self.subscribed_channels(socket : HTTP::WebSocket) : Array(String)
-        channels = [] of String
-        
-        @@channels.each do |channel, subs|
-          if subs.any? { |s| s.socket == socket }
-            channels << channel
+        @@mutex.synchronize do
+          channels = [] of String
+          @@channels.each do |channel, subs|
+            if subs.any? { |s| s.socket == socket }
+              channels << channel
+            end
           end
+          channels
         end
-        
-        channels
       end
 
       def self.cleanup_socket(socket : HTTP::WebSocket)
-        @@channels.each do |channel, subs|
-          if subs.any? { |s| s.socket == socket }
-            unsubscribe(channel, socket)
-          end
-        end
+        @@operation_channel.send(CleanupOperation.new(socket))
       end
     end
   end

@@ -37,59 +37,112 @@ module Hauyna
 
       # Métodos de utilidad
       def self.get_socket(identifier : String) : HTTP::WebSocket?
-        @@connections[identifier]
+        @@mutex.synchronize do
+          @@connections[identifier]?
+        end
       end
 
       def self.send_to_one(identifier : String, message : String)
-        if socket = @@connections[identifier]?
+        socket = @@mutex.synchronize do
+          @@connections[identifier]?
+        end
+        
+        if socket
           begin
             socket.send(message)
           rescue
+            cleanup_socket(socket)
           end
         end
       end
 
       def self.send_to_many(identifiers : Array(String), message : String)
-        identifiers.each do |identifier|
-          send_to_one(identifier, message)
+        # Obtener sockets bajo el lock
+        sockets = @@mutex.synchronize do
+          identifiers.compact_map { |id| @@connections[id]? }
+        end
+        
+        # Enviar mensajes fuera del lock
+        sockets.each do |socket|
+          begin
+            socket.send(message)
+          rescue
+            cleanup_socket(socket)
+          end
         end
       end
 
       def self.send_to_group(group_name : String, message : String)
-        members = @@groups[group_name]?.try(&.dup) || Set(String).new
-        members.each do |identifier|
-          send_to_one(identifier, message)
+        # Obtener miembros e identificadores bajo el lock
+        sockets = @@mutex.synchronize do
+          members = @@groups[group_name]?.try(&.dup) || Set(String).new
+          members.compact_map { |id| @@connections[id]? }
+        end
+        
+        # Enviar mensajes fuera del lock
+        sockets.each do |socket|
+          begin
+            socket.send(message)
+          rescue
+            cleanup_socket(socket)
+          end
         end
       end
 
       def self.clear
-        @@connections.clear
-        @@groups.clear
-        @@socket_to_identifier.clear
+        @@mutex.synchronize do
+          @@connections.clear
+          @@groups.clear
+          @@socket_to_identifier.clear
+          @@connection_states.clear
+          @@state_timestamps.clear
+          @@retry_policies.clear
+          @@retry_attempts.clear
+        end
       end
 
       def self.get_identifier(socket : HTTP::WebSocket) : String?
-        @@socket_to_identifier[socket]
+        @@mutex.synchronize do
+          @@socket_to_identifier[socket]?
+        end
       end
 
       def self.all_connections : Array(HTTP::WebSocket)
-        @@connections.values
+        @@mutex.synchronize do
+          @@connections.values.to_a
+        end
       end
 
       def self.count : Int32
-        @@connections.size
+        @@mutex.synchronize do
+          @@connections.size
+        end
       end
 
       def self.get_connection_state(socket : HTTP::WebSocket) : ConnectionState?
-        @@connection_states[socket]?
+        @@mutex.synchronize do
+          @@connection_states[socket]?
+        end
       end
 
       def self.get_state_timestamp(socket : HTTP::WebSocket) : Time?
-        @@state_timestamps[socket]?
+        @@mutex.synchronize do
+          @@state_timestamps[socket]?
+        end
       end
 
       def self.connections_in_state(state : ConnectionState) : Array(HTTP::WebSocket)
-        @@connection_states.select { |_, s| s == state }.keys
+        @@mutex.synchronize do
+          @@connection_states.select { |_, s| s == state }.keys
+        end
+      end
+
+      def self.cleanup_socket(socket : HTTP::WebSocket)
+        @@operation_channel.send(
+          ConnectionOperation.new(:unregister, {
+            socket: socket
+          }.as(ConnectionOperation::UnregisterData))
+        )
       end
     end
   end

@@ -14,19 +14,28 @@ module Hauyna
       end
 
       private def self.internal_unregister(socket)
-        if identifier = @@socket_to_identifier[socket]?
-          @@connections.delete(identifier)
-          @@socket_to_identifier.delete(socket)
-          @@connection_states.delete(socket)
-          @@state_timestamps.delete(socket)
-          @@retry_policies.delete(socket)
-          @@retry_attempts.delete(socket)
-          @@groups.each do |_, members|
-            members.delete(identifier)
-          end
+        @@mutex.synchronize do
+          if identifier = @@socket_to_identifier[socket]?
+            # Limpiar todas las estructuras de datos relacionadas con el socket
+            @@connections.delete(identifier)
+            @@socket_to_identifier.delete(socket)
+            @@connection_states.delete(socket)
+            @@state_timestamps.delete(socket)
+            @@retry_policies.delete(socket)
+            @@retry_attempts.delete(socket)
+            
+            # Limpiar grupos
+            @@groups.each do |_, members|
+              members.delete(identifier)
+            end
+            # Eliminar grupos vacíos
+            @@groups.reject! { |_, members| members.empty? }
 
-          # Notificar desconexión
-          notify_state_change(socket, ConnectionState::Connected, ConnectionState::Disconnected)
+            # Notificar desconexión fuera del lock
+            spawn do
+              notify_state_change(socket, ConnectionState::Connected, ConnectionState::Disconnected)
+            end
+          end
         end
       end
 

@@ -1,4 +1,4 @@
-require "../connection_manager/mod"
+require "../connection_manager/connection_manager"
 require "../error_handler"
 require "../logging"
 require "./handlers"

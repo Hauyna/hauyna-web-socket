@@ -1,4 +1,4 @@
-require "../connection_manager/mod"
+require "../connection_manager/connection_manager"
 require "../message_validator"
 require "../error_handler"
 require "./base"

@@ -1,5 +1,5 @@
 require "./hauyna-web-socket/channel/channel"
-require "./hauyna-web-socket/connection_manager/mod"
+require "./hauyna-web-socket/connection_manager/connection_manager"
 require "./hauyna-web-socket/events/events"
 require "./hauyna-web-socket/handler/handler"
 require "./hauyna-web-socket/presence/presence"

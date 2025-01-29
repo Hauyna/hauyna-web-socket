@@ -68,11 +68,29 @@ def self.get_group_members(group_name : String) : Set(String)
 ```
 Obtiene los miembros de un grupo.
 
+### get_connection_state
+```crystal
+def self.get_connection_state(socket : HTTP::WebSocket) : ConnectionState?
+```
+Obtiene el estado actual de una conexión.
+
+### get_state_timestamp
+```crystal
+def self.get_state_timestamp(socket : HTTP::WebSocket) : Time?
+```
+Obtiene el timestamp del último cambio de estado.
+
+### on_state_change
+```crystal
+def self.on_state_change(&block : HTTP::WebSocket, ConnectionState?, ConnectionState -> Nil)
+```
+Registra un callback para cambios de estado.
+
 ### set_connection_state
 ```crystal
-def self.set_connection_state(socket : HTTP::WebSocket, state : ConnectionState) : Bool
+def self.set_connection_state(socket : HTTP::WebSocket, state : ConnectionState)
 ```
-Actualiza el estado de una conexión.
+Actualiza el estado de una conexión. Retorna void ya que el estado se procesa de forma asíncrona.
 
 ### set_retry_policy
 ```crystal

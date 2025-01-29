@@ -58,6 +58,18 @@ def self.presence_data(channel : String) : Hash(String, JSON::Any)
 ```
 Obtiene datos de presencia para un canal.
 
+### handle_reconnection
+```crystal
+def self.handle_reconnection(socket : HTTP::WebSocket, old_socket : HTTP::WebSocket)
+```
+Maneja la reconexión de un socket, transfiriendo sus suscripciones.
+
+### cleanup_socket
+```crystal
+def self.cleanup_socket(socket : HTTP::WebSocket)
+```
+Limpia todas las suscripciones asociadas a un socket.
+
 ## Ejemplos de Uso
 
 ```crystal

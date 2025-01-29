@@ -1,5 +1,5 @@
 require "http"
-require "../handler/mod"
+require "../handler/handler"
 require "../error_handler"
 module Hauyna
     module WebSocket

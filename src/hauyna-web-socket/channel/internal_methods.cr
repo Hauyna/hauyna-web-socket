@@ -14,7 +14,14 @@ module Hauyna
           "metadata" => JSON::Any.new(metadata.to_json),
         }
 
-        internal_broadcast(channel, event_message)
+        spawn do
+          @@operation_channel.send(
+            ChannelOperation.new(:broadcast, {
+              channel: channel,
+              message: event_message
+            }.as(ChannelOperation::BroadcastData))
+          )
+        end
         
         Presence.track(identifier, metadata.merge({
           "channel" => JSON::Any.new(channel),
@@ -36,9 +43,15 @@ module Hauyna
               "user"    => JSON::Any.new(subscription.identifier),
             }
 
-            internal_broadcast(channel, event_message)
+            spawn do
+              @@operation_channel.send(
+                ChannelOperation.new(:broadcast, {
+                  channel: channel,
+                  message: event_message
+                }.as(ChannelOperation::BroadcastData))
+              )
+            end
             
-            # Actualizar presencia
             if ConnectionManager.get_identifier(socket) == subscription.identifier
               Presence.update(subscription.identifier, {
                 "status" => JSON::Any.new("offline"),
@@ -50,19 +63,18 @@ module Hauyna
       end
 
       private def self.internal_broadcast(channel, message)
-        message = message.to_json if message.is_a?(Hash(String, JSON::Any))
+        message = message.to_json if message.is_a?(Hash)
         if subs = @@channels[channel]?
           subs.each do |subscription|
             spawn do
               begin
                 subscription.socket.send(message)
               rescue
-                data = {
-                  channel: channel,
-                  socket: subscription.socket
-                }
                 @@operation_channel.send(
-                  ChannelOperation.new(:unsubscribe, data.as(ChannelOperation::UnsubscribeData))
+                  ChannelOperation.new(:unsubscribe, {
+                    channel: channel,
+                    socket: subscription.socket
+                  }.as(ChannelOperation::UnsubscribeData))
                 )
               end
             end

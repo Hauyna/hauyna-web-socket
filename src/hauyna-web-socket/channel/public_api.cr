@@ -34,8 +34,16 @@ module Hauyna
         )
       end
 
+      def self.subscription_count(channel : String) : Int32
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.size) || 0
+        end
+      end
+
       def self.subscribers(channel : String) : Array(String)
-        @@channels[channel]?.try(&.map(&.identifier).to_a) || [] of String
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.map(&.identifier).to_a) || [] of String
+        end
       end
 
       def self.subscribed_channels(socket : HTTP::WebSocket) : Array(String)
@@ -43,14 +51,14 @@ module Hauyna
       end
 
       def self.subscribed?(channel : String, socket : HTTP::WebSocket) : Bool
-        @@channels[channel]?.try(&.any? { |s| s.socket == socket }) || false
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.any? { |s| s.socket == socket }) || false
+        end
       end
 
       def self.get_subscription_metadata(channel : String, socket : HTTP::WebSocket) : Hash(String, JSON::Any)?
-        if subs = @@channels[channel]?
-          if subscription = subs.find { |s| s.socket == socket }
-            subscription.metadata
-          end
+        @@mutex.synchronize do
+          @@channels[channel]?.try(&.find { |s| s.socket == socket }).try(&.metadata)
         end
       end
     end

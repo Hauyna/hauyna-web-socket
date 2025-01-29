@@ -9,6 +9,12 @@ module Hauyna
       spawn do
         loop do
           operation = @@operation_channel.receive
+          process_operation(operation)
+        end
+      end
+
+      private def self.process_operation(operation : ChannelOperation)
+        @@mutex.synchronize do
           case operation.type
           when :subscribe
             data = operation.data.as(ChannelOperation::SubscribeData)
@@ -19,52 +25,6 @@ module Hauyna
           when :broadcast
             data = operation.data.as(ChannelOperation::BroadcastData)
             internal_broadcast(data[:channel], data[:message])
-          end
-        end
-      end
-
-      private def self.process_operation(operation : ChannelOperation)
-        case operation.type
-        when :subscribe
-          data = operation.data.as(ChannelOperation::SubscribeData)
-          @@mutex.synchronize do
-            channel = data[:channel]
-            @@channels[channel] ||= Set(Subscription).new
-            subscription = Subscription.new(data[:socket], data[:identifier], data[:metadata])
-            @@channels[channel] << subscription
-          end
-          
-          # Notificar a Presence
-          notify_presence(operation)
-          
-          puts "DEBUG: Operación subscribe procesada - Canal: #{channel}, Usuario: #{data[:identifier]}"
-          
-        when :unsubscribe
-          data = operation.data.as(ChannelOperation::UnsubscribeData)
-          channel = data[:channel]
-          socket = data[:socket]
-
-          if subs = @@channels[channel]?
-            filtered_subs = subs.reject { |s| s.socket == socket }.to_set
-            if filtered_subs.empty?
-              @@channels.delete(channel)
-            else
-              @@channels[channel] = filtered_subs
-            end
-            puts "DEBUG: Operación unsubscribe procesada - Canal: #{channel}"
-          end
-
-        when :broadcast
-          data = operation.data.as(ChannelOperation::BroadcastData)
-          channel = data[:channel]
-          message = data[:message]
-
-          if subs = @@channels[channel]?
-            subs.each do |subscription|
-              next if subscription.socket.closed?
-              subscription.socket.send(message.to_json)
-            end
-            puts "DEBUG: Operación broadcast procesada - Canal: #{channel}"
           end
         end
       rescue ex

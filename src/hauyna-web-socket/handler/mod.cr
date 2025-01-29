@@ -1,7 +1,18 @@
 require "json"
 require "http/web_socket"
 
-require "./handler/*"
+require "../connection_manager/mod"
+require "../heartbeat"
+require "../message_validator"
+require "../error_handler"
+require "../channel/mod"
+require "../presence/mod"
+require "./initializer"
+require "./callbacks"
+require "./connection_management"
+require "./message_handling"
+require "./message_processor"
+require "./socket_events"
 
 module Hauyna
   module WebSocket

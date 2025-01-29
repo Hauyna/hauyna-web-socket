@@ -1,11 +1,11 @@
 name: hauyna-web-socket
-version: 1.0.0
+version: 1.0.1
 
 authors:
   - Jose Antonio Padre Garcia <padre_japg@protonmail.com>
   - Luis Antonio Padre García <luispadre@protonmail.com>
 
-crystal: ">= 1.14.0"
+crystal: ">= 1.15.0"
 
 description: |
   Una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona un conjunto completo de herramientas para gestionar conexiones WebSocket, canales, grupos, seguimiento de presencia, manejo de eventos y más.

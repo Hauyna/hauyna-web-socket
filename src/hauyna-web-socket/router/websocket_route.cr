@@ -1,4 +1,3 @@
-require "./handler"
 
 module Hauyna
   module WebSocket

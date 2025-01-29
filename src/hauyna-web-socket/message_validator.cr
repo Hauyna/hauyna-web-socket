@@ -19,6 +19,12 @@ module Hauyna
           validate_private(message)
         when "group"
           validate_group(message)
+        when "channel_message"
+          validate_channel_message(message)
+        when "subscribe_channel"
+          validate_channel_subscription(message)
+        when "unsubscribe_channel"
+          validate_channel_unsubscription(message)
         end
       end
 
@@ -43,6 +49,32 @@ module Hauyna
         end
         unless message["message"]?
           raise ValidationError.new("El mensaje de grupo debe tener contenido")
+        end
+      end
+
+      private def self.validate_channel_message(message)
+        unless channel = message["channel"]?.try(&.as_s?)
+          raise ValidationError.new("El mensaje de canal debe especificar el canal")
+        end
+        unless message["content"]?
+          raise ValidationError.new("El mensaje de canal debe tener contenido")
+        end
+      end
+
+      private def self.validate_channel_subscription(message)
+        unless channel = message["channel"]?.try(&.as_s?)
+          raise ValidationError.new("La suscripción debe especificar el canal")
+        end
+        if metadata = message["metadata"]?
+          unless metadata.as_h?
+            raise ValidationError.new("Los metadatos deben ser un objeto")
+          end
+        end
+      end
+
+      private def self.validate_channel_unsubscription(message)
+        unless channel = message["channel"]?.try(&.as_s?)
+          raise ValidationError.new("La desuscripción debe especificar el canal")
         end
       end
     end

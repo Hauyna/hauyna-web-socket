@@ -1,12 +1,12 @@
 # Hauyna WebSocket
 
-[![Crystal](https://img.shields.io/badge/Crystal-1.14.0-black?style=flat&logo=crystal&logoColor=white)](https://crystal-lang.org)
+[![Crystal](https://img.shields.io/badge/Crystal-1.15.0-black?style=flat&logo=crystal&logoColor=white)](https://crystal-lang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Hauyna WebSocket** es una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona un conjunto completo de herramientas para gestionar conexiones WebSocket, canales, grupos, seguimiento de presencia, manejo de eventos y más.
 
 
-🚀 **Características Destacadas**:
+🚀 **Características **:
 - 📡 Sistema de canales para comunicación en tiempo real
 - 👥 Gestión avanzada de grupos y conexiones
 - 🔄 Eventos personalizables y sistema de presencia
@@ -22,6 +22,11 @@
 - 🔄 Reconexión automática
 - 📨 Broadcast y mensajes directos
 - 🎭 Roles y permisos por grupo
+- 📝 Sistema de logging configurable
+- 🔒 Operaciones thread-safe con mutex
+- 🚦 Manejo mejorado de timeouts
+- 🛡️ Manejo extendido de errores
+
 
 ## Tabla de Contenidos
 
@@ -47,7 +52,6 @@
 - [Contribuciones](#contribuciones)
 - [Autores](#autores)
 - [Licencia](#licencia)
-
 
 ## Características 
 
@@ -91,6 +95,33 @@
 - **Reconexión**: Manejo automático de reconexiones
 - **Estado de Conexión**: Monitoreo del estado de la conexión
 - **Limpieza**: Cierre automático de conexiones inactivas
+
+### Sistema de Logging
+```crystal
+# Configurar el sistema de logging
+Hauyna::WebSocket::configure_logging
+
+# Ajustar nivel de log
+Hauyna::WebSocket.log_level = :debug
+
+# Los logs se manejarán automáticamente
+Log.debug { "Mensaje de debug" }
+Log.info  { "Mensaje informativo" }
+Log.warn  { "Advertencia" }
+Log.error { "Error" }
+```
+
+### Thread Safety
+```crystal
+# Las operaciones críticas están protegidas por mutex
+Hauyna::WebSocket::Channel.subscribe("chat", socket, "user_123")
+
+# Las operaciones de broadcast son thread-safe
+Hauyna::WebSocket::Channel.broadcast_to("chat", message)
+
+# Las operaciones de presencia son seguras en concurrencia
+Hauyna::WebSocket::Presence.track(identifier, metadata)
+```
 
 ### Manejo de Errores
 - **Validación de Mensajes**: Verificación automática de formato y contenido
@@ -249,7 +280,7 @@ Añade la dependencia a tu `shard.yml`:
 dependencies:
   hauyna-web-socket:
     github: Hauyna/hauyna-web-socket
-    version: ~> 1.0.0
+    version: ~> 1.0.1
 ```
 
 Ejecuta `shards install` para instalar la shard.

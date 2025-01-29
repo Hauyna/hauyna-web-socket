@@ -1,6 +1,26 @@
 # Changelog
 
-## [1.0.0] - 2025-01-26
+## [1.0.1] - 2024-03-19
+
+### Changed
+- Mejorado el manejo de timeouts usando el sistema de heartbeat en lugar de timeouts TCP
+- Optimizado el manejo de conexiones para Crystal 1.15.0
+- Mejorado el sistema de logging con nuevo módulo dedicado
+
+### Added
+- Nuevo módulo de logging con niveles configurables
+- Manejo más específico de errores en ErrorHandler
+  - Soporte para IO::Error
+  - Soporte para Socket::Error
+  - Mejor logging de errores no manejados
+- Mutex para operaciones críticas en el sistema de canales
+
+### Fixed
+- Corregido el manejo de identificadores nulos en setup_connection
+- Eliminados not_nil! innecesarios para mejor seguridad en tiempo de ejecución
+- Mejorada la sincronización en operaciones de canales
+
+## [1.0.0] - 2024-01-26
 
 ### Added
 - Sistema de canales para comunicación en tiempo real

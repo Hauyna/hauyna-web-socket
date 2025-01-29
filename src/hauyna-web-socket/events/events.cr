@@ -10,4 +10,4 @@ module Hauyna
       # Este archivo sirve como punto de entrada para el módulo Events
     end
   end
-end 
+end

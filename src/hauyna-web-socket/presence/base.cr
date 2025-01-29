@@ -18,7 +18,7 @@ module Hauyna
         @@operation_channel.send(
           PresenceOperation.new(:track, {
             identifier: identifier,
-            metadata: metadata
+            metadata:   metadata,
           }.as(PresenceOperation::TrackData))
         )
       end
@@ -26,7 +26,7 @@ module Hauyna
       def self.untrack(identifier : String)
         @@operation_channel.send(
           PresenceOperation.new(:untrack, {
-            identifier: identifier
+            identifier: identifier,
           }.as(PresenceOperation::UntrackData))
         )
       end
@@ -35,7 +35,7 @@ module Hauyna
         @@operation_channel.send(
           PresenceOperation.new(:update, {
             identifier: identifier,
-            metadata: metadata
+            metadata:   metadata,
           }.as(PresenceOperation::UpdateData))
         )
       end
@@ -54,4 +54,4 @@ module Hauyna
       end
     end
   end
-end 
+end

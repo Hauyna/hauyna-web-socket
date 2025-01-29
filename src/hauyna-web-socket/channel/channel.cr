@@ -14,4 +14,4 @@ module Hauyna
       # Este archivo sirve como punto de entrada para el módulo Channel
     end
   end
-end 
+end

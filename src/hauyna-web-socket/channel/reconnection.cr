@@ -18,17 +18,17 @@ module Hauyna
           @@operation_channel.send(
             ChannelOperation.new(:unsubscribe, {
               channel: channel,
-              socket: old_socket
+              socket:  old_socket,
             }.as(ChannelOperation::UnsubscribeData))
           )
 
           # Luego suscribir el nuevo socket
           @@operation_channel.send(
             ChannelOperation.new(:subscribe, {
-              channel: channel,
-              socket: socket,
+              channel:    channel,
+              socket:     socket,
               identifier: old_subscription.identifier,
-              metadata: old_subscription.metadata
+              metadata:   old_subscription.metadata,
             }.as(ChannelOperation::SubscribeData))
           )
 
@@ -45,7 +45,7 @@ module Hauyna
           @@operation_channel.send(
             ChannelOperation.new(:broadcast, {
               channel: channel,
-              message: event_message
+              message: event_message,
             }.as(ChannelOperation::BroadcastData))
           )
         end
@@ -56,7 +56,7 @@ module Hauyna
             Presence.update(
               first_sub[1].identifier,
               first_sub[1].metadata.merge({
-                "reconnected" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+                "reconnected" => JSON::Any.new(Time.local.to_unix_ms.to_s),
               })
             )
           end
@@ -69,4 +69,4 @@ module Hauyna
       end
     end
   end
-end 
+end

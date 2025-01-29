@@ -11,7 +11,7 @@ module Hauyna
         heartbeat_interval : Time::Span? = nil,
         heartbeat_timeout : Time::Span? = nil,
         @read_timeout : Int32 = 30,
-        @write_timeout : Int32 = 30
+        @write_timeout : Int32 = 30,
       )
         if heartbeat_interval
           @heartbeat = Heartbeat.new(
@@ -22,4 +22,4 @@ module Hauyna
       end
     end
   end
-end 
+end

@@ -4,6 +4,7 @@ module Hauyna
       # Operación específica para cleanup
       private class CleanupOperation
         getter socket : HTTP::WebSocket
+
         def initialize(@socket)
         end
       end
@@ -46,7 +47,7 @@ module Hauyna
 
       private def self.process_cleanup(operation : CleanupOperation)
         channels_to_cleanup = [] of String
-        
+
         @@mutex.synchronize do
           @@channels.each do |channel, subs|
             if subs.any? { |s| s.socket == operation.socket }
@@ -60,7 +61,7 @@ module Hauyna
           @@operation_channel.send(
             ChannelOperation.new(:unsubscribe, {
               channel: channel,
-              socket: operation.socket
+              socket:  operation.socket,
             }.as(ChannelOperation::UnsubscribeData))
           )
         end
@@ -72,10 +73,10 @@ module Hauyna
         return unless ConnectionManager.get_identifier(socket)
 
         data = {
-          channel: channel,
-          socket: socket,
+          channel:    channel,
+          socket:     socket,
           identifier: identifier,
-          metadata: metadata
+          metadata:   metadata,
         }
         @@operation_channel.send(
           ChannelOperation.new(:subscribe, data.as(ChannelOperation::SubscribeData))
@@ -85,7 +86,7 @@ module Hauyna
       def self.unsubscribe(channel : String, socket : HTTP::WebSocket)
         data = {
           channel: channel,
-          socket: socket
+          socket:  socket,
         }
         @@operation_channel.send(
           ChannelOperation.new(:unsubscribe, data.as(ChannelOperation::UnsubscribeData))
@@ -95,7 +96,7 @@ module Hauyna
       def self.broadcast_to(channel : String, message : Hash(String, JSON::Any) | String)
         data = {
           channel: channel,
-          message: message
+          message: message,
         }
         @@operation_channel.send(
           ChannelOperation.new(:broadcast, data.as(ChannelOperation::BroadcastData))
@@ -129,22 +130,22 @@ module Hauyna
 
       def self.presence_data(channel : String) : Hash(String, JSON::Any)
         puts "DEBUG: Obteniendo datos de presencia para canal: #{channel}"
-        
+
         # Obtener datos de presencia filtrados por canal
         presence_data = Presence.list_by_channel(channel)
         puts "DEBUG: Datos de presencia raw: #{presence_data.inspect}"
-        
+
         # Formatear los datos para la respuesta
         formatted_data = {} of String => JSON::Any
         presence_data.each do |identifier, data|
           metadata = data["metadata"]?.try(&.as_h) || {} of String => JSON::Any
           state = data["state"]?.try(&.as_s) || "unknown"
-          
+
           formatted_data[identifier] = JSON::Any.new({
-            "user_id" => JSON::Any.new(identifier),
-            "metadata" => JSON::Any.new(metadata.to_json),
-            "state" => JSON::Any.new(state),
-            "connected_at" => metadata["joined_at"]?.try(&.as_s) || Time.local.to_unix_ms.to_s
+            "user_id"      => JSON::Any.new(identifier),
+            "metadata"     => JSON::Any.new(metadata.to_json),
+            "state"        => JSON::Any.new(state),
+            "connected_at" => metadata["joined_at"]?.try(&.as_s) || Time.local.to_unix_ms.to_s,
           }.to_json)
         end
 
@@ -156,11 +157,11 @@ module Hauyna
         if identifier = ConnectionManager.get_identifier(socket)
           subscribed_channels(socket).each do |channel|
             presence_metadata = {
-              "state" => JSON::Any.new(state.to_s),
-              "channel" => JSON::Any.new(channel),
-              "updated_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+              "state"      => JSON::Any.new(state.to_s),
+              "channel"    => JSON::Any.new(channel),
+              "updated_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
             }
-            
+
             Presence.update(identifier, presence_metadata)
             puts "DEBUG: Presencia actualizada para #{identifier} en canal #{channel} - Estado: #{state}"
           end
@@ -184,4 +185,4 @@ module Hauyna
       end
     end
   end
-end 
+end

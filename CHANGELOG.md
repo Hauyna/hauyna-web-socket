@@ -3,27 +3,33 @@
 ## [1.0.1] - 2024-03-19
 
 ### Changed
-- Mejorado el manejo de timeouts usando el sistema de heartbeat en lugar de timeouts TCP
+- Mejorado el manejo de timeouts usando el sistema de **heartbeat** en lugar de timeouts TCP
 - Optimizado el manejo de conexiones para Crystal 1.15.0
-- Mejorado el sistema de logging con nuevo módulo dedicado
+- Mejorado el sistema de **logging** con nuevo módulo dedicado
+- **Refactorizada la concurrencia** en `Presence` y `Channel` usando canales de operaciones y mutex para lecturas/escrituras
+- Incorporada la clase `CleanupOperation` para realizar **unsubscribes** de manera segura en canales
 
 ### Added
-- Nuevo módulo de logging con niveles configurables
-- Manejo más específico de errores en ErrorHandler
-  - Soporte para IO::Error
-  - Soporte para Socket::Error
+- Nuevo **módulo de logging** con niveles configurables
+- Manejo más específico de errores en **ErrorHandler**:
+  - Soporte para `IO::Error`
+  - Soporte para `Socket::Error`
   - Mejor logging de errores no manejados
-- Mutex para operaciones críticas en el sistema de canales
+- **Mutex** para operaciones críticas en el sistema de canales
+- Nuevas **consultas thread-safe** en el sistema de presencia (`Presence.list`, `Presence.list_by`, etc.)
 
 ### Fixed
-- Corregido el manejo de identificadores nulos en setup_connection
-- Eliminados not_nil! innecesarios para mejor seguridad en tiempo de ejecución
-- Mejorada la sincronización en operaciones de canales
+- Corregido el manejo de identificadores nulos en `setup_connection`
+- Eliminados `not_nil!` innecesarios para mejor seguridad en tiempo de ejecución
+- Mejorada la sincronización en **operaciones de canales**
+- Resuelto el acceso concurrente en lecturas/escrituras de presencia para evitar condiciones de carrera
+
+---
 
 ## [1.0.0] - 2024-01-26
 
 ### Added
-- Sistema de canales para comunicación en tiempo real
+- **Sistema de canales** para comunicación en tiempo real
   - Suscripciones flexibles a múltiples canales
   - Broadcast selectivo por canal
   - Gestión de metadatos por suscripción
@@ -32,7 +38,7 @@
   - Verificación de suscripciones
   - Obtención de metadatos de suscripción
 
-- Sistema de presencia con metadatos
+- **Sistema de presencia** con metadatos
   - Tracking en tiempo real de usuarios
   - Metadatos personalizables por usuario
   - Filtrado por canal o grupo
@@ -42,7 +48,7 @@
   - Verificación de presencia
   - Actualización de estado en tiempo real
 
-- Gestión de conexiones y grupos
+- **Gestión de conexiones y grupos**
   - Identificación única de conexiones
   - Sistema de grupos dinámicos
   - Mensajería directa y broadcast
@@ -52,34 +58,34 @@
   - Manejo de grupos de usuarios
   - Envío de mensajes a grupos
 
-- Sistema de eventos básico
+- **Sistema de eventos básico**
   - Registro de manejadores de eventos
   - Callbacks configurables
   - Manejo básico de errores
   - Broadcast de eventos
 
-- Heartbeat básico
+- **Heartbeat básico**
   - Intervalos configurables
   - Timeouts personalizables
   - Monitoreo de estado
   - Limpieza de conexiones inactivas
   - Registro de pongs
 
-- Manejo de errores
+- **Manejo de errores**
   - Validación de mensajes
   - Errores tipados básicos
   - Respuestas de error formateadas
   - Logging básico
   - Manejo de errores de conexión
 
-- Router WebSocket
+- **Router WebSocket**
   - Rutas con parámetros
   - Extracción de parámetros
   - Validación de conexiones
   - Contexto HTTP básico
   - Manejo de upgrade WebSocket
 
-- Sistema de estados de conexión
+- **Sistema de estados de conexión**
   - Estados detallados (Connected, Disconnected, Reconnecting, Error, Idle)
   - Timestamps de cambios de estado
   - Notificaciones automáticas de cambios
@@ -119,4 +125,4 @@
 ### Documentation
 - README con ejemplos básicos
 - Documentación inline de código
-- Guía de contribución básica 
+- Guía de contribución básica

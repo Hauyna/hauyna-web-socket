@@ -5,6 +5,11 @@
 
 **Hauyna WebSocket** es una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona un conjunto completo de herramientas para gestionar conexiones WebSocket, canales, grupos, seguimiento de presencia, manejo de eventos y más.
 
+> **Nueva versión (1.0.1)**  
+> Esta actualización **no rompe compatibilidad** con Crystal 1.14.x. La mayoría de los cambios son internos y están enfocados en la seguridad de concurrencia y la estabilidad de los canales de comunicación. El uso externo de la librería se mantiene **transparente**.
+
+---
+
 ## Quick Start
 
 ```crystal
@@ -238,9 +243,9 @@ sequenceDiagram
 ## Compatibilidad
 
 | Crystal Version | Hauyna Version | Estado |
-|----------------|----------------|---------|
-| 1.15.x         | 1.0.1         | ✅      |
-| 1.14.x         | 1.0.0         | ✅      |
+|----------------|----------------|--------|
+| 1.15.x         | 1.0.1         | ✅     |
+| 1.14.x         | 1.0.1         | ✅     |
 
 ## Documentación
 

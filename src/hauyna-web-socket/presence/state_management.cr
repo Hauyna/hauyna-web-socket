@@ -20,12 +20,12 @@ module Hauyna
       private def self.internal_track(identifier : String, metadata : Hash(String, JSON::Any))
         # Ya estamos dentro del mutex desde process_operation
         metadata = metadata.merge({
-          "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+          "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
         })
 
         @@presence[identifier] = {
           "metadata" => JSON::Any.new(metadata.to_json),
-          "state" => JSON::Any.new("online")
+          "state"    => JSON::Any.new("online"),
         }
 
         spawn do
@@ -48,10 +48,10 @@ module Hauyna
         if current_data = @@presence[identifier]?
           current_metadata = current_data["metadata"]?.try(&.as_h) || {} of String => JSON::Any
           updated_metadata = current_metadata.merge(metadata)
-          
+
           @@presence[identifier] = {
             "metadata" => JSON::Any.new(updated_metadata.to_json),
-            "state" => current_data["state"]? || JSON::Any.new("online")
+            "state"    => current_data["state"]? || JSON::Any.new("online"),
           }
 
           spawn do
@@ -61,4 +61,4 @@ module Hauyna
       end
     end
   end
-end 
+end

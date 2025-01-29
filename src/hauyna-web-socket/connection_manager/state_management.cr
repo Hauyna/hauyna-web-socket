@@ -11,11 +11,11 @@ module Hauyna
       end
 
       private VALID_TRANSITIONS = {
-        ConnectionState::Connected => [ConnectionState::Idle, ConnectionState::Disconnected, ConnectionState::Error],
-        ConnectionState::Idle => [ConnectionState::Connected, ConnectionState::Disconnected, ConnectionState::Error],
+        ConnectionState::Connected    => [ConnectionState::Idle, ConnectionState::Disconnected, ConnectionState::Error],
+        ConnectionState::Idle         => [ConnectionState::Connected, ConnectionState::Disconnected, ConnectionState::Error],
         ConnectionState::Disconnected => [ConnectionState::Reconnecting, ConnectionState::Error],
         ConnectionState::Reconnecting => [ConnectionState::Connected, ConnectionState::Error],
-        ConnectionState::Error => [ConnectionState::Reconnecting]
+        ConnectionState::Error        => [ConnectionState::Reconnecting],
       }
 
       # Canal para operaciones de estado
@@ -57,7 +57,7 @@ module Hauyna
 
       private def self.handle_retry(socket : HTTP::WebSocket)
         return unless policy = @@retry_policies[socket]?
-        
+
         @@mutex.synchronize do
           attempts = @@retry_attempts[socket] ||= 0
           return if attempts >= policy.max_attempts
@@ -70,7 +70,7 @@ module Hauyna
         # Programar el reintento fuera del lock
         spawn do
           sleep delay
-          
+
           # Verificar el estado actual antes de intentar reconectar
           @@mutex.synchronize do
             current_state = @@connection_states[socket]?
@@ -133,15 +133,15 @@ module Hauyna
       private def self.internal_set_state(socket, state)
         @@connection_states[socket] = state
         @@state_timestamps[socket] = Time.local
-        
+
         if identifier = get_identifier(socket)
           state_message = {
-            "type" => JSON::Any.new("connection_state"),
-            "user" => JSON::Any.new(identifier),
-            "state" => JSON::Any.new(state.to_s),
-            "timestamp" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+            "type"      => JSON::Any.new("connection_state"),
+            "user"      => JSON::Any.new(identifier),
+            "state"     => JSON::Any.new(state.to_s),
+            "timestamp" => JSON::Any.new(Time.local.to_unix_ms.to_s),
           }
-          
+
           begin
             socket.send(state_message.to_json)
           rescue
@@ -151,4 +151,4 @@ module Hauyna
       end
     end
   end
-end 
+end

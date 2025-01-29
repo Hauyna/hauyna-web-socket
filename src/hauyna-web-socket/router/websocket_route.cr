@@ -1,4 +1,3 @@
-
 module Hauyna
   module WebSocket
     class WebSocketRoute

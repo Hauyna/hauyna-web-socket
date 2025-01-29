@@ -18,15 +18,15 @@ module Hauyna
           @@operation_channel.send(
             ChannelOperation.new(:broadcast, {
               channel: channel,
-              message: event_message
+              message: event_message,
             }.as(ChannelOperation::BroadcastData))
           )
         end
-        
+
         Presence.track(identifier, metadata.merge({
           "channel" => JSON::Any.new(channel),
         }))
-        
+
         notify_presence(:join)
       end
 
@@ -47,15 +47,15 @@ module Hauyna
               @@operation_channel.send(
                 ChannelOperation.new(:broadcast, {
                   channel: channel,
-                  message: event_message
+                  message: event_message,
                 }.as(ChannelOperation::BroadcastData))
               )
             end
-            
+
             if ConnectionManager.get_identifier(socket) == subscription.identifier
               Presence.update(subscription.identifier, {
-                "status" => JSON::Any.new("offline"),
-                "left_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+                "status"  => JSON::Any.new("offline"),
+                "left_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
               })
             end
           end
@@ -73,7 +73,7 @@ module Hauyna
                 @@operation_channel.send(
                   ChannelOperation.new(:unsubscribe, {
                     channel: channel,
-                    socket: subscription.socket
+                    socket:  subscription.socket,
                   }.as(ChannelOperation::UnsubscribeData))
                 )
               end
@@ -87,9 +87,9 @@ module Hauyna
         when :join, :leave, :update
           presence_state = Presence.list
           presence_message = {
-            "type" => JSON::Any.new("presence_state"),
+            "type"  => JSON::Any.new("presence_state"),
             "event" => JSON::Any.new(operation.to_s),
-            "state" => JSON::Any.new(presence_state.to_json)
+            "state" => JSON::Any.new(presence_state.to_json),
           }
 
           @@channels.each do |channel, _|
@@ -109,4 +109,4 @@ module Hauyna
       end
     end
   end
-end 
+end

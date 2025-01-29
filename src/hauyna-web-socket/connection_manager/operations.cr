@@ -4,32 +4,27 @@ module Hauyna
       private class ConnectionOperation
         alias RegisterData = NamedTuple(
           socket: HTTP::WebSocket,
-          identifier: String
-        )
+          identifier: String)
 
         alias UnregisterData = NamedTuple(
-          socket: HTTP::WebSocket
-        )
+          socket: HTTP::WebSocket)
 
         alias BroadcastData = NamedTuple(
-          message: String
-        )
+          message: String)
 
         alias GroupData = NamedTuple(
           identifier: String,
-          group_name: String
-        )
+          group_name: String)
 
         alias StateData = NamedTuple(
           socket: HTTP::WebSocket,
-          state: ConnectionState
-        )
+          state: ConnectionState)
 
         alias OperationData = RegisterData | UnregisterData | BroadcastData | GroupData | StateData
 
         getter type : Symbol
         getter data : OperationData
-        
+
         def initialize(@type : Symbol, @data : OperationData)
         end
       end
@@ -59,4 +54,4 @@ module Hauyna
       end
     end
   end
-end 
+end

@@ -37,7 +37,7 @@ module Hauyna
           type:       "error",
           error_type: type,
           message:    message,
-          timestamp:  Time.local.to_unix_ms
+          timestamp:  Time.local.to_unix_ms,
         }.to_json
 
         begin

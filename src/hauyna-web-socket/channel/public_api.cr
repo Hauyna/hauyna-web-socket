@@ -4,10 +4,10 @@ module Hauyna
       # API pública
       def self.subscribe(channel : String, socket : HTTP::WebSocket, identifier : String, metadata = {} of String => JSON::Any)
         data = {
-          channel: channel,
-          socket: socket,
+          channel:    channel,
+          socket:     socket,
           identifier: identifier,
-          metadata: metadata
+          metadata:   metadata,
         }
         @@operation_channel.send(
           ChannelOperation.new(:subscribe, data.as(ChannelOperation::SubscribeData))
@@ -17,7 +17,7 @@ module Hauyna
       def self.unsubscribe(channel : String, socket : HTTP::WebSocket)
         data = {
           channel: channel,
-          socket: socket
+          socket:  socket,
         }
         @@operation_channel.send(
           ChannelOperation.new(:unsubscribe, data.as(ChannelOperation::UnsubscribeData))
@@ -27,7 +27,7 @@ module Hauyna
       def self.broadcast_to(channel : String, message : Hash(String, JSON::Any) | String)
         data = {
           channel: channel,
-          message: message
+          message: message,
         }
         @@operation_channel.send(
           ChannelOperation.new(:broadcast, data.as(ChannelOperation::BroadcastData))
@@ -63,4 +63,4 @@ module Hauyna
       end
     end
   end
-end 
+end

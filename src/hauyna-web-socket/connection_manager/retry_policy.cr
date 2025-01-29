@@ -13,7 +13,7 @@ module Hauyna
           @base_delay = 1.seconds,
           @max_delay = 30.seconds,
           @backoff_multiplier = 2.0,
-          @jitter = 0.1
+          @jitter = 0.1,
         )
         end
 
@@ -23,7 +23,7 @@ module Hauyna
           delay = base_delay * (backoff_multiplier ** attempt)
           jitter_amount = delay * jitter
           delay += Random.rand(-jitter_amount.total_seconds..jitter_amount.total_seconds).seconds
-          
+
           [delay, max_delay].min
         end
       end
@@ -51,4 +51,4 @@ module Hauyna
       end
     end
   end
-end 
+end

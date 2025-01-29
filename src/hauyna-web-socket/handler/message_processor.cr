@@ -9,7 +9,7 @@ module Hauyna
           MessageValidator.validate_message(parsed_message)
 
           handle_channel_subscription(socket, parsed_message)
-          
+
           if parsed_message["type"]?.try(&.as_s) == "channel_message"
             handle_channel_message(socket, parsed_message)
           else
@@ -24,4 +24,4 @@ module Hauyna
       end
     end
   end
-end 
+end

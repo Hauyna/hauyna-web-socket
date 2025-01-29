@@ -10,6 +10,14 @@ crystal: ">= 1.15.0"
 description: |
   Una biblioteca Crystal diseñada para simplificar la implementación de aplicaciones WebSocket en tiempo real. Proporciona un conjunto completo de herramientas para gestionar conexiones WebSocket, canales, grupos, seguimiento de presencia, manejo de eventos y más.
 
+homepage: https://github.com/hauyna/hauyna-web-socket
 repository: https://github.com/hauyna/hauyna-web-socket
 
+bugs:
+  url: https://github.com/hauyna/hauyna-web-socket/issues
+files:
+  - LICENSE
+  - README.md
+  - shard.yml
+  - src/**
 license: MIT

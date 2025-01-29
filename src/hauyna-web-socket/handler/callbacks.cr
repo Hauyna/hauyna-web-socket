@@ -10,4 +10,4 @@ module Hauyna
       property heartbeat : Heartbeat?
     end
   end
-end 
+end

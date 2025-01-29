@@ -4,7 +4,7 @@ module Hauyna
       private def self.internal_register(socket, identifier)
         @@connections[identifier] = socket
         @@socket_to_identifier[socket] = identifier
-        
+
         # Agregar estado inicial
         @@connection_states[socket] = ConnectionState::Connected
         @@state_timestamps[socket] = Time.local
@@ -23,7 +23,7 @@ module Hauyna
             @@state_timestamps.delete(socket)
             @@retry_policies.delete(socket)
             @@retry_attempts.delete(socket)
-            
+
             # Limpiar grupos
             @@groups.each do |_, members|
               members.delete(identifier)
@@ -47,7 +47,7 @@ module Hauyna
             rescue
               @@operation_channel.send(
                 ConnectionOperation.new(:unregister, {
-                  socket: socket
+                  socket: socket,
                 }.as(ConnectionOperation::UnregisterData))
               )
             end
@@ -94,7 +94,7 @@ module Hauyna
 
       def self.set_connection_state(socket : HTTP::WebSocket, new_state : ConnectionState) : Bool
         current_state = @@connection_states[socket]?
-        
+
         unless current_state
           internal_set_state(socket, new_state)
           return true
@@ -117,4 +117,4 @@ module Hauyna
       end
     end
   end
-end 
+end

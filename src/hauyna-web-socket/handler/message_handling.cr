@@ -8,13 +8,13 @@ module Hauyna
               if content = parsed_message["content"]?
                 # Convertir el contenido al formato correcto
                 message_to_send = case content
-                when .as_s?
-                  content.as_s
-                when .as_h?
-                  content.as_h.transform_values { |v| v.as(JSON::Any) }
-                else
-                  content.to_json
-                end
+                                  when .as_s?
+                                    content.as_s
+                                  when .as_h?
+                                    content.as_h.transform_values { |v| v.as(JSON::Any) }
+                                  else
+                                    content.to_json
+                                  end
                 Channel.broadcast_to(channel, message_to_send)
               end
             end
@@ -39,4 +39,4 @@ module Hauyna
       end
     end
   end
-end 
+end

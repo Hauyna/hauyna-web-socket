@@ -4,8 +4,8 @@ module Hauyna
       def self.register(socket : HTTP::WebSocket, identifier : String)
         @@operation_channel.send(
           ConnectionOperation.new(:register, {
-            socket: socket,
-            identifier: identifier
+            socket:     socket,
+            identifier: identifier,
           }.as(ConnectionOperation::RegisterData))
         )
       end
@@ -13,7 +13,7 @@ module Hauyna
       def self.unregister(socket : HTTP::WebSocket)
         @@operation_channel.send(
           ConnectionOperation.new(:unregister, {
-            socket: socket
+            socket: socket,
           }.as(ConnectionOperation::UnregisterData))
         )
       end
@@ -21,7 +21,7 @@ module Hauyna
       def self.broadcast(message : String)
         @@operation_channel.send(
           ConnectionOperation.new(:broadcast, {
-            message: message
+            message: message,
           }.as(ConnectionOperation::BroadcastData))
         )
       end
@@ -30,7 +30,7 @@ module Hauyna
         @@operation_channel.send(
           ConnectionOperation.new(:add_to_group, {
             identifier: identifier,
-            group_name: group_name
+            group_name: group_name,
           }.as(ConnectionOperation::GroupData))
         )
       end
@@ -46,7 +46,7 @@ module Hauyna
         socket = @@mutex.synchronize do
           @@connections[identifier]?
         end
-        
+
         if socket
           begin
             socket.send(message)
@@ -61,7 +61,7 @@ module Hauyna
         sockets = @@mutex.synchronize do
           identifiers.compact_map { |id| @@connections[id]? }
         end
-        
+
         # Enviar mensajes fuera del lock
         sockets.each do |socket|
           begin
@@ -78,7 +78,7 @@ module Hauyna
           members = @@groups[group_name]?.try(&.dup) || Set(String).new
           members.compact_map { |id| @@connections[id]? }
         end
-        
+
         # Enviar mensajes fuera del lock
         sockets.each do |socket|
           begin
@@ -140,10 +140,10 @@ module Hauyna
       def self.cleanup_socket(socket : HTTP::WebSocket)
         @@operation_channel.send(
           ConnectionOperation.new(:unregister, {
-            socket: socket
+            socket: socket,
           }.as(ConnectionOperation::UnregisterData))
         )
       end
     end
   end
-end 
+end

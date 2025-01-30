@@ -170,7 +170,7 @@ require "hauyna-web-socket"
 
 # Configurar el handler con soporte para canales
 handler = Hauyna::WebSocket::Handler.new(
-  extract_identifier: ->(socket, params) { params["user_id"]?.try(&.as_s) || "anon" },
+  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) { params["user_id"]?.try(&.as_s) || "anon" },
   
   on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
     user_id = params["user_id"]?.try(&.as_s) || "anon"
@@ -192,7 +192,13 @@ handler = Hauyna::WebSocket::Handler.new(
     when "broadcast_channel"
       # Broadcast a un canal específico
       if channel = message["channel"]?.try(&.as_s)
-        Hauyna::WebSocket::Channel.broadcast_to(channel, message["content"])
+        content = case message["content"]
+        when .as_h?
+          message["content"].as_h
+        else
+          {"message" => message["content"]} of String => JSON::Any
+        end
+        Hauyna::WebSocket::Channel.broadcast_to(channel, content)
       end
     
     when "broadcast_group"
@@ -313,18 +319,33 @@ handler = Hauyna::WebSocket::Handler.new(
 El sistema de presencia permite rastrear usuarios conectados y su estado en tiempo real:
 
 ```crystal
+require "hauyna-web-socket"
+
 # Configurar el handler con sistema de presencia
 handler = Hauyna::WebSocket::Handler.new(
-  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) : String {
     user_id = params["user_id"]?.try(&.as_s)
-    if user_id
-      # Iniciar tracking de presencia
-      Hauyna::WebSocket::Presence.track(user_id, {
-        "status" => JSON::Any.new("online"),
-        "user_name" => params["user_name"]?.try(&.as_s).try { |name| JSON::Any.new(name) },
-        "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
-      })
+    return "anonymous" unless user_id # Retornamos un valor por defecto en lugar de nil
+    
+    # Tracking inicial
+    metadata = {
+      "status" => JSON::Any.new("online")
+    } of String => JSON::Any
+    
+    # Añadir metadata adicional si está presente
+    if meta = params["metadata"]?.try(&.as_h)
+      meta.each do |k, v|
+        metadata[k] = v
+      end
     end
+    
+    Hauyna::WebSocket::Presence.track(user_id, metadata)
+    
+    # Suscribir a canal con presencia
+    Hauyna::WebSocket::Channel.subscribe("chat", socket, user_id, {
+      "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+    } of String => JSON::Any)
+    
     user_id
   }
 )
@@ -376,20 +397,28 @@ end
 
 # Ejemplo de uso con canales
 handler = Hauyna::WebSocket::Handler.new(
-  extract_identifier: ->(socket, params) {
+  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) : String {
     user_id = params["user_id"]?.try(&.as_s)
-    return unless user_id
+    return "anonymous" unless user_id # Retornamos un valor por defecto en lugar de nil
     
     # Tracking inicial
-    Hauyna::WebSocket::Presence.track(user_id, {
-      "status" => JSON::Any.new("online"),
-      "metadata" => params["metadata"]?.try(&.as_h) || {} of String => JSON::Any
-    })
+    metadata = {
+      "status" => JSON::Any.new("online")
+    } of String => JSON::Any
+    
+    # Añadir metadata adicional si está presente
+    if meta = params["metadata"]?.try(&.as_h)
+      meta.each do |k, v|
+        metadata[k] = v
+      end
+    end
+    
+    Hauyna::WebSocket::Presence.track(user_id, metadata)
     
     # Suscribir a canal con presencia
     Hauyna::WebSocket::Channel.subscribe("chat", socket, user_id, {
       "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
-    })
+    } of String => JSON::Any)
     
     user_id
   },
@@ -402,12 +431,25 @@ handler = Hauyna::WebSocket::Handler.new(
   }
 )
 
-# Monitoreo de presencia
+# Helper para contar usuarios por estado
+def count_users_by_state : Hash(String, Int32)
+  presence_list = Hauyna::WebSocket::Presence.list
+  users_by_state = {} of String => Int32
+  
+  presence_list.each do |_, data|
+    state = data["state"]?.try(&.as_s) || "unknown"
+    users_by_state[state] ||= 0
+    users_by_state[state] += 1
+  end
+  
+  users_by_state
+end
+
+# Uso del helper en el monitoreo
 spawn do
   loop do
-    # Obtener métricas de presencia
     total_users = Hauyna::WebSocket::Presence.count
-    users_by_state = Hauyna::WebSocket::Presence.count_by_state
+    users_by_state = count_users_by_state
     
     puts "Usuarios totales: #{total_users}"
     puts "Por estado: #{users_by_state}"
@@ -415,6 +457,7 @@ spawn do
     sleep 60.seconds
   end
 end
+
 ```
 
 
@@ -425,7 +468,9 @@ require "hauyna-web-socket"
 
 # Configurar el handler con soporte para grupos
 handler = Hauyna::WebSocket::Handler.new(
-  extract_identifier: ->(socket, params) { params["user_id"]?.try(&.as_s) }
+  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+    params["user_id"]?.try(&.as_s) || "anonymous"  # Devolvemos "anonymous" si no hay user_id
+  }
 )
 
 # Gestión de grupos
@@ -470,11 +515,11 @@ Hauyna::WebSocket::Events.on("message_received") do |socket, data|
   if data["content"]?
     Hauyna::WebSocket::Channel.broadcast_to(data["channel"].as_s, {
       "type" => JSON::Any.new("message"),
-      "from" => data["user"].as_s,
-      "content" => data["content"]
+      "from" => JSON::Any.new(data["user"].as_s),
+      "content" => JSON::Any.new(data["content"].as_s)
     })
-        end
-    end
+  end
+end
 ```
 
 ## Ejemplos

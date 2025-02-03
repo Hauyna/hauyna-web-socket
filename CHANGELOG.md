@@ -1,6 +1,18 @@
 # Changelog
 
-## [1.0.1] - 2024-03-19
+## [1.0.1] - 2024-03-XX
+
+### Fixed
+- Corregido el sistema de carga de la biblioteca para los tests
+- Restaurada la funcionalidad completa del Heartbeat
+  - Añadido método `record_pong` para mantener compatibilidad
+  - Mejorado el manejo de estados de conexión
+  - Implementado thread-safety con mutex
+- Organizada la estructura de requires en el archivo principal
+- Corregido el manejo de identificadores nulos en `setup_connection`
+- Eliminados `not_nil!` innecesarios para mejor seguridad en tiempo de ejecución
+- Mejorada la sincronización en **operaciones de canales**
+- Resuelto el acceso concurrente en lecturas/escrituras de presencia para evitar condiciones de carrera
 
 ### Changed
 - Mejorado el manejo de timeouts usando el sistema de **heartbeat** en lugar de timeouts TCP
@@ -8,6 +20,9 @@
 - Mejorado el sistema de **logging** con nuevo módulo dedicado
 - **Refactorizada la concurrencia** en `Presence` y `Channel` usando canales de operaciones y mutex para lecturas/escrituras
 - Incorporada la clase `CleanupOperation` para realizar **unsubscribes** de manera segura en canales
+- Reorganizada la estructura de archivos para mejor modularidad
+- Mejorado el manejo de estados en el Heartbeat
+- Actualizada la inicialización del WebSocket en los tests
 
 ### Added
 - Nuevo **módulo de logging** con niveles configurables
@@ -17,14 +32,13 @@
   - Mejor logging de errores no manejados
 - **Mutex** para operaciones críticas en el sistema de canales
 - Nuevas **consultas thread-safe** en el sistema de presencia (`Presence.list`, `Presence.list_by`, etc.)
+- Nuevo archivo principal `hauyna-web-socket.cr` para mejor organización
+- Añadido manejo thread-safe en el Heartbeat
+- Mejorada la documentación de tests
 
-### Fixed
-- Corregido el manejo de identificadores nulos en `setup_connection`
-- Eliminados `not_nil!` innecesarios para mejor seguridad en tiempo de ejecución
-- Mejorada la sincronización en **operaciones de canales**
-- Resuelto el acceso concurrente en lecturas/escrituras de presencia para evitar condiciones de carrera
-
----
+### Technical Debt
+- Actualizada la estructura de requires
+- Mejorado el manejo de dependencias
 
 ## [1.0.0] - 2024-01-26
 

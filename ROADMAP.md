@@ -11,6 +11,10 @@
   - [ ] Pruebas de manejo de errores
 
 ### Características Implementadas ✅
+- [x] **Mejoras en Testing**
+  - [x] Estructura de tests organizada
+  - [x] Tests de heartbeat mejorados
+  - [x] Tests de conexión actualizados
 - [x] **Sistema de Logging Avanzado**
   - [x] Módulo base de logging
   - [x] Niveles de log configurables

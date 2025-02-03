@@ -4,48 +4,64 @@ module Hauyna
       property interval : Time::Span
       property timeout : Time::Span
 
-      def initialize(@interval = 30.seconds, @timeout = 60.seconds)
-        @last_pong = {} of HTTP::WebSocket => Time
+      def initialize(@interval : Time::Span = 30.seconds, @timeout : Time::Span = 60.seconds)
+        @sockets = {} of HTTP::WebSocket => Time
+        @mutex = Mutex.new
+        
+        spawn do
+          loop do
+            check_timeouts
+            sleep @interval
+          end
+        end
       end
 
       def start(socket : HTTP::WebSocket)
-        spawn do
-          loop do
-            sleep @interval
+        register(socket)
+      end
 
-            # Enviar ping
-            begin
-              socket.ping
-              check_timeout(socket)
-            rescue ex
-              # 1000 es el código para cierre normal
-              socket.close(1000)
-              break
+      private def check_timeouts
+        now = Time.local
+        sockets_to_close = [] of HTTP::WebSocket
+
+        @mutex.synchronize do
+          @sockets.each do |socket, last_pong|
+            if now - last_pong > @timeout
+              sockets_to_close << socket
             end
           end
         end
-      end
 
-      private def check_timeout(socket)
-        if last = @last_pong[socket]?
-          if Time.local - last > @timeout
-            # Intentar transición a Disconnected
-            if ConnectionManager.set_connection_state(socket, ConnectionState::Disconnected)
-              socket.close(1001, "Heartbeat timeout")
-            end
-          elsif Time.local - last > @interval * 2
-            # Intentar transición a Idle
-            ConnectionManager.set_connection_state(socket, ConnectionState::Idle)
-          end
+        sockets_to_close.each do |socket|
+          socket.close(4000, "Heartbeat timeout")
         end
       end
 
+      def register(socket : HTTP::WebSocket)
+        @mutex.synchronize do
+          @sockets[socket] = Time.local
+        end
+      end
+
+      # Mantener ambos métodos para compatibilidad
       def record_pong(socket : HTTP::WebSocket)
-        @last_pong[socket] = Time.local
+        handle_pong(socket, "")
+      end
+
+      def handle_pong(socket : HTTP::WebSocket, message : String)
+        @mutex.synchronize do
+          @sockets[socket] = Time.local
+          # Actualizar estado si es necesario
+          if ConnectionManager.get_connection_state(socket) == ConnectionState::Idle
+            ConnectionManager.set_connection_state(socket, ConnectionState::Connected)
+          end
+        end
       end
 
       def cleanup(socket : HTTP::WebSocket)
-        @last_pong.delete(socket)
+        @mutex.synchronize do
+          @sockets.delete(socket)
+        end
       end
     end
   end

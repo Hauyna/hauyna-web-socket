@@ -3,6 +3,13 @@ module Hauyna
     class Channel
       private def self.internal_subscribe(channel, socket, identifier, metadata)
         @@channels[channel] ||= Set(Subscription).new
+        
+        # Asegurarnos de que el metadata incluya el estado
+        metadata = metadata.merge({
+          "state" => JSON::Any.new(metadata["state"]?.try(&.as_s) || "online"),
+          "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
+        })
+        
         subscription = Subscription.new(socket, identifier, metadata)
         @@channels[channel].add(subscription)
 
@@ -23,10 +30,12 @@ module Hauyna
           )
         end
 
-        Presence.track(identifier, metadata.merge({
+        # Asegurarnos de que el estado se incluya en los datos de presencia
+        presence_metadata = metadata.merge({
           "channel" => JSON::Any.new(channel),
-        }))
+        })
 
+        Presence.track(identifier, presence_metadata)
         notify_presence(:join)
       end
 
@@ -53,10 +62,7 @@ module Hauyna
             end
 
             if ConnectionManager.get_identifier(socket) == subscription.identifier
-              Presence.update(subscription.identifier, {
-                "status"  => JSON::Any.new("offline"),
-                "left_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
-              })
+              Presence.untrack(subscription.identifier)
             end
           end
         end

@@ -5,20 +5,27 @@
 ### Prioridad Alta
 - [ ] **Mejoras en Testing**
   - [ ] Aumentar cobertura de pruebas
-  - [ ] Pruebas de integración básicas
-  - [ ] Pruebas de concurrencia
+  - [ ] Pruebas de integración avanzadas
+  - [ ] Pruebas de concurrencia exhaustivas
   - [ ] Pruebas de timeouts y heartbeat
   - [ ] Pruebas de manejo de errores
+  - [ ] Pruebas de escenarios de fallo
+  - [ ] Pruebas de rendimiento bajo carga
 
 ### Características Implementadas ✅
 - [x] **Mejoras en Testing**
   - [x] Estructura de tests organizada
   - [x] Tests de heartbeat mejorados
   - [x] Tests de conexión actualizados
+  - [x] Tests de concurrencia básicos
+  - [x] Tests de presencia
+  - [x] Tests de canales
+
 - [x] **Sistema de Logging Avanzado**
   - [x] Módulo base de logging
   - [x] Niveles de log configurables
   - [x] Formateo básico de logs
+  - [x] Integración con ErrorHandler
 
 - [x] **Estabilidad y Errores**
   - [x] Mejor manejo de errores de conexión
@@ -27,11 +34,13 @@
   - [x] Transiciones de estado personalizables
   - [x] Hooks para cambios de estado
   - [x] Políticas de reintentos personalizables
+  - [x] Manejo thread-safe de estados
 
 - [x] **Sistema de eventos básico**
   - [x] Registro de eventos
   - [x] Propagación de eventos
   - [x] Manejo de eventos por tipo
+  - [x] Eventos de sistema
 
 - [x] **Mejoras de Performance y Concurrencia**
   - [x] Sincronización con `Mutex`
@@ -39,6 +48,7 @@
   - [x] Manejo optimizado de conexiones
   - [x] Concurrencia robusta en **ConnectionManager**, **Channel** y **Presence**
   - [x] Limpieza automática con `CleanupOperation`
+  - [x] Thread-safety en operaciones críticas
 
 ## Versión [1.2.0]
 

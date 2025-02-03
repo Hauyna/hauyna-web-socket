@@ -32,6 +32,20 @@ module Hauyna
         end
       end
 
+      def self.handle_presence_error(error : Exception)
+        Log.error { "Error de presencia: #{error.message}" }
+        Log.error { error.backtrace?.try &.join("\n") }
+
+        case error
+        when TypeCastError
+          log_error(error, "Error de conversión de tipos en presencia")
+        when JSON::ParseException
+          log_error(error, "Error de parsing JSON en presencia")
+        else
+          log_error(error, "Error inesperado en presencia")
+        end
+      end
+
       private def self.send_error(socket : HTTP::WebSocket, type : String, message : String)
         error_message = {
           type:       "error",

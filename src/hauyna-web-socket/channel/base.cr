@@ -26,6 +26,13 @@ module Hauyna
         end
       end
 
+      # Método para limpiar todo el estado (usado en pruebas)
+      def self.cleanup_all
+        @@mutex.synchronize do
+          @@channels.clear
+        end
+      end
+
       private def self.process_operation(operation : ChannelOperation)
         @@mutex.synchronize do
           case operation.type
@@ -139,7 +146,7 @@ module Hauyna
         formatted_data = {} of String => JSON::Any
         presence_data.each do |identifier, data|
           metadata = data["metadata"]?.try(&.as_h) || {} of String => JSON::Any
-          state = data["state"]?.try(&.as_s) || "unknown"
+          state = data["state"]?.try(&.as_s) || metadata["state"]?.try(&.as_s) || "online"
 
           formatted_data[identifier] = JSON::Any.new({
             "user_id"      => JSON::Any.new(identifier),
@@ -157,7 +164,14 @@ module Hauyna
         if identifier = ConnectionManager.get_identifier(socket)
           subscribed_channels(socket).each do |channel|
             presence_metadata = {
-              "state"      => JSON::Any.new(state.to_s),
+              "state"      => JSON::Any.new(case state
+                when .error?
+                  "error"
+                when .disconnected?
+                  "offline"
+                else
+                  state.to_s.downcase
+                end),
               "channel"    => JSON::Any.new(channel),
               "updated_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
             }

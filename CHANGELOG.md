@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.1] - 2024-03-XX
+## [1.0.1] - 2024-02-03
 
 ### Fixed
 - Corregido el sistema de carga de la biblioteca para los tests

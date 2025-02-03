@@ -20,7 +20,7 @@ describe "Connection Integration" do
     Hauyna::WebSocket::ConnectionManager.cleanup_socket(socket)
     
     # Dar tiempo para que se procese la operación asíncrona
-    sleep 0.1
+    sleep 0.1.seconds
     
     # Verificar limpieza
     Hauyna::WebSocket::ConnectionManager.get_identifier(socket).should be_nil

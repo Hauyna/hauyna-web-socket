@@ -147,8 +147,6 @@ Hauyna::WebSocket::ConnectionManager.set_retry_policy(socket, retry_policy)
 
 ### Manejo de Errores
 
-La biblioteca incluye un sistema robusto de manejo de errores:
-
 ```crystal
 # Errores personalizados en callbacks
 handler = Hauyna::WebSocket::Handler.new(
@@ -158,9 +156,20 @@ handler = Hauyna::WebSocket::Handler.new(
     rescue ex : JSON::ParseException
       # El ErrorHandler se encargará automáticamente
       raise ex
+    rescue ex : IO::Error
+      # Se cerrará automáticamente el socket con código 1006
+      raise ex
     end
   }
 )
+
+# El sistema maneja automáticamente:
+# - Errores de conexión (IO::Error) con cierre de socket
+# - Errores de socket (Socket::Error)
+# - Errores de validación y parsing
+# - Errores de runtime y tipo
+# - Logging detallado de errores
+# - Limpieza segura de recursos
 ```
 
 ### Canales y Broadcast

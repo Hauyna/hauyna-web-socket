@@ -8,7 +8,10 @@
   - [ ] Pruebas de integración avanzadas
   - [ ] Pruebas de concurrencia exhaustivas
   - [ ] Pruebas de timeouts y heartbeat
-  - [ ] Pruebas de manejo de errores
+  - [x] Pruebas de manejo de errores
+    - [x] IO::Error
+    - [x] Socket::Error
+    - [x] Errores de validación
   - [ ] Pruebas de escenarios de fallo
   - [ ] Pruebas de rendimiento bajo carga
 

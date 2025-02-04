@@ -4,6 +4,11 @@
 
 ### Fixed
 - Corregido el sistema de carga de la biblioteca para los tests
+- Mejorado el manejo de errores en ErrorHandler
+  - Implementado cierre de socket (código 1006) para IO::Error
+  - Añadido manejo específico para Socket::Error
+  - Mejorado el logging de errores
+  - Implementada limpieza segura de recursos
 - Restaurada la funcionalidad completa del Heartbeat
   - Añadido método `record_pong` para mantener compatibilidad
   - Mejorado el manejo de estados de conexión

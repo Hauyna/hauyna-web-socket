@@ -9,6 +9,7 @@ module Hauyna
           send_error(socket, "parse_error", "Formato de mensaje inválido")
         when IO::Error
           send_error(socket, "connection_error", "Error de conexión")
+          socket.close(1006)
         when Socket::Error
           send_error(socket, "socket_error", "Error en el socket")
         when RuntimeError
@@ -27,7 +28,7 @@ module Hauyna
         when OverflowError
           send_error(socket, "overflow_error", "Error de desbordamiento")
         else
-          Log.error { "Error no manejado: #{error.message}\n#{error.backtrace?.try &.join("\n")}" }
+          log_error(error, "Error no manejado")
           send_error(socket, "internal_error", "Error interno del servidor")
         end
       end

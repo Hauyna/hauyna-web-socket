@@ -16,6 +16,8 @@
     - [x] Socket::Error
     - [x] Errores de validación
     - [x] Errores de metadatos
+    - [x] Validación de JSON en campos
+    - [x] Estados de error en presencia
   - [ ] Pruebas de escenarios de fallo
   - [ ] Pruebas de rendimiento bajo carga
 
@@ -27,7 +29,14 @@
   - [x] Control mejorado del ciclo de vida
   - [x] API más clara y consistente
   - [x] Validación robusta de metadatos
+    - [x] Campos requeridos
+    - [x] JSON válido
+    - [x] Estados por defecto
+    - [x] Preservación de datos
   - [x] Manejo consistente de estados
+    - [x] Estados de error
+    - [x] Transiciones válidas
+    - [x] Preservación de estado
 
 - [x] **Mejoras en Testing**
   - [x] Estructura de tests organizada
@@ -38,6 +47,7 @@
     - [x] Validación de metadatos
     - [x] Operaciones concurrentes
     - [x] Estados por defecto
+    - [x] Manejo de errores
   - [x] Tests de canales
 
 - [x] **Sistema de Logging Avanzado**

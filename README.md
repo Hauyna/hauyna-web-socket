@@ -359,11 +359,30 @@ users_in_channel = Hauyna::WebSocket::Presence.list_by_channel("general")
 is_online = Hauyna::WebSocket::Presence.present?("user123")
 user_count = Hauyna::WebSocket::Presence.count
 
-# Actualización thread-safe de metadata con validación
+# Actualización thread-safe de metadata con validación robusta
 Hauyna::WebSocket::Presence.update("user123", {
   "status" => JSON::Any.new("away"),     # Campo requerido
-  "last_activity" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+  "last_activity" => JSON::Any.new(Time.local.to_unix_ms.to_s),
+  "metadata" => JSON::Any.new({          # Debe ser JSON válido
+    "custom_field" => "value"
+  }.to_json)
 })
+
+# Manejo de errores en presencia
+begin
+  # Intentar actualizar con JSON inválido
+  Hauyna::WebSocket::Presence.update("user123", {
+    "metadata" => JSON::Any.new("{ invalid json }")
+  })
+rescue ex
+  # El sistema manejará el error y establecerá el estado apropiado
+  presence = Hauyna::WebSocket::Presence.get_presence("user123")
+  puts "Estado: #{presence["state"]}"  # Mostrará "error"
+  if metadata = presence["metadata"]?
+    error_data = JSON.parse(metadata.as_s)
+    puts "Error: #{error_data["error_message"]}"
+  end
+end
 
 # Monitoreo de cambios de presencia con estados consistentes
 Hauyna::WebSocket::Events.on("presence_change") do |socket, data|
@@ -374,15 +393,24 @@ Hauyna::WebSocket::Events.on("presence_change") do |socket, data|
     puts "Usuario #{data["user_id"]} se fue"
   when "update"
     puts "Usuario #{data["user_id"]} cambió su estado a #{data["status"]}"
+  when "error"
+    puts "Error en presencia: #{data["error_message"]}"
   end
 end
 
 # Características del sistema de presencia mejorado:
 # - Gestión centralizada con PresenceManager
 # - Validación robusta de metadatos
+#   - Campos requeridos (status)
+#   - Validación de JSON
+#   - Estados por defecto
+#   - Preservación de datos
 # - Campo status siempre presente con valor por defecto
 # - Operaciones thread-safe optimizadas
 # - Manejo consistente de estados
+#   - Estados de error
+#   - Transiciones válidas
+#   - Preservación de estado
 # - API clara y predecible
 # - Mejor manejo de errores y logging
 ```

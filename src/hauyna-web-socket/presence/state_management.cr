@@ -43,12 +43,25 @@ module Hauyna
       end
 
       def validate_metadata(metadata : Hash(String, JSON::Any))
-        REQUIRED_METADATA_FIELDS.each do |field|
-          unless metadata[field]?
-            metadata[field] = JSON::Any.new("online")
+        begin
+          REQUIRED_METADATA_FIELDS.each do |field|
+            unless metadata[field]?
+              metadata[field] = JSON::Any.new("online")
+            end
           end
+
+          # Ensure the metadata can be properly serialized
+          metadata_json = metadata.to_json
+          JSON.parse(metadata_json)
+
+          metadata
+        rescue ex
+          {
+            "state" => JSON::Any.new(STATES[:ERROR]),
+            "error_message" => JSON::Any.new(ex.message || "Invalid metadata format"),
+            "error_at" => JSON::Any.new(Time.utc.to_s)
+          }
         end
-        metadata
       end
 
       def present?(identifier : String) : Bool

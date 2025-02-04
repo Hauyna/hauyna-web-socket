@@ -8,6 +8,9 @@
   - Corregido el acceso a metadatos en operaciones concurrentes
   - Mejorado el manejo de estados por defecto
   - Asegurada la consistencia de datos en operaciones de lista
+  - Validación robusta de JSON en campos de metadatos
+  - Manejo mejorado de estados de error en presencia
+  - Preservación segura de campos requeridos (status)
 
 ### Changed
 - Refactorizado el sistema de presencia usando patrón Singleton
@@ -16,6 +19,7 @@
   - Optimizado el manejo de canales de operaciones
   - Mejor encapsulación del estado global
   - Operaciones thread-safe mejoradas
+  - Validación robusta de metadatos y estados
 
 ### Added
 - Nuevo sistema de gestión centralizada con `PresenceManager`
@@ -24,10 +28,14 @@
   - Gestión mejorada de recursos
   - API más clara y consistente
   - Mejor manejo de errores y logging
+  - Sistema robusto de validación de metadatos
 - Validación de campos requeridos en metadatos de presencia
   - Campo "status" siempre presente con valor por defecto
   - Manejo seguro de metadatos faltantes
   - Validación en operaciones de track y update
+  - Detección y manejo de JSON inválido
+  - Estados de error consistentes
+  - Preservación segura de metadatos originales
 
 ### Technical Improvements
 - Separación clara de responsabilidades entre módulos
@@ -35,6 +43,7 @@
 - Reducción del acoplamiento entre componentes
 - Mejor testabilidad y mantenibilidad
 - Operaciones más predecibles y seguras
+- Sistema robusto de validación y manejo de errores
 
 ## [1.0.1] - 2024-02-03
 

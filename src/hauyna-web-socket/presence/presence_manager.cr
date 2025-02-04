@@ -5,6 +5,15 @@ module Hauyna
     module Presence
       class PresenceManager
         CHANNEL_BUFFER_SIZE = 100
+        
+        # Estados válidos para la presencia
+        STATES = {
+          ONLINE:      "online",
+          OFFLINE:     "offline",
+          ERROR:       "error",
+          CONNECTING:  "connecting",
+          DISCONNECTED: "disconnected"
+        }
 
         class_property instance : PresenceManager { new }
         
@@ -53,49 +62,74 @@ module Hauyna
         end
 
         private def process_operation(operation : PresenceOperation)
-          @mutex.synchronize do
-            case operation.type
-            when :track
-              data = operation.data.as(PresenceOperation::TrackData)
-              internal_track(data[:identifier], data[:metadata])
-            when :untrack
-              data = operation.data.as(PresenceOperation::UntrackData)
-              internal_untrack(data[:identifier])
-            when :update
-              data = operation.data.as(PresenceOperation::UpdateData)
-              internal_update(data[:identifier], data[:metadata])
+          case operation.type
+          when :track
+            data = operation.data.as(PresenceOperation::TrackData)
+            @mutex.synchronize do
+              validated_metadata = validate_metadata(data[:metadata])
+              presence_data = {
+                "state" => JSON::Any.new(validated_metadata["state"].as_s),
+                "status" => JSON::Any.new(validated_metadata["status"].as_s),
+                "metadata" => JSON::Any.new(validated_metadata.to_json)
+              }
+              @presence[data[:identifier]] = presence_data
+            end
+          when :update
+            data = operation.data.as(PresenceOperation::UpdateData)
+            @mutex.synchronize do
+              validated_metadata = validate_metadata(data[:metadata])
+              @presence[data[:identifier]] = {
+                "state" => JSON::Any.new(validated_metadata["state"].as_s),
+                "status" => JSON::Any.new(validated_metadata["status"].as_s),
+                "metadata" => JSON::Any.new(validated_metadata.to_json)
+              }
+            end
+          when :untrack
+            data = operation.data.as(PresenceOperation::UntrackData)
+            @mutex.synchronize do
+              @presence.delete(data[:identifier])
             end
           end
-        rescue ex : Exception
-          Log.error { "Error processing operation #{operation.type}: #{ex.message}" }
         end
 
-        private def internal_track(identifier : String, metadata : Hash(String, JSON::Any))
-          processed_metadata = metadata.merge({
-            "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
-            "state" => JSON::Any.new(STATES[:ONLINE])
-          })
+        private def validate_metadata(metadata : Hash(String, JSON::Any)) : Hash(String, JSON::Any)
+          begin
+            # Validate each metadata field that could contain JSON
+            metadata.each do |key, value|
+              if value.as_s?
+                begin
+                  # Try to parse any string value as JSON to catch invalid JSON
+                  JSON.parse(value.as_s)
+                rescue ex
+                  # If any field contains invalid JSON, raise an error
+                  raise Exception.new("Invalid JSON in field '#{key}': #{ex.message}")
+                end
+              end
+            end
 
-          @presence[identifier] = {
-            "metadata" => JSON::Any.new(processed_metadata.to_json),
-            "status" => metadata["status"]? || JSON::Any.new(STATES[:ONLINE]),
-            "state" => JSON::Any.new(STATES[:ONLINE])
-          }
-        end
-
-        private def internal_untrack(identifier : String)
-          @presence.delete(identifier)
-        end
-
-        private def internal_update(identifier : String, metadata : Hash(String, JSON::Any))
-          if current = @presence[identifier]?
-            current_metadata = JSON.parse(current["metadata"].as_s).as_h
-            updated_metadata = current_metadata.merge(metadata)
-
-            @presence[identifier] = {
-              "metadata" => JSON::Any.new(updated_metadata.to_json),
-              "state" => JSON::Any.new(metadata["state"]?.try(&.as_s) || current["state"].as_s)
+            # If all validations pass
+            metadata["updated_at"] = JSON::Any.new(Time.utc.to_s)
+            metadata["state"] = JSON::Any.new(STATES[:ONLINE])
+            # Ensure status is present, default to online if not provided
+            metadata["status"] = JSON::Any.new(metadata["status"]?.try(&.as_s) || STATES[:ONLINE])
+            metadata
+          rescue ex
+            # If validation fails, return error state with details
+            error_metadata = {
+              "state" => JSON::Any.new(STATES[:ERROR]),
+              "status" => JSON::Any.new(metadata["status"]?.try(&.as_s) || STATES[:ERROR]),
+              "error_message" => JSON::Any.new(ex.message || "Invalid metadata format"),
+              "error_at" => JSON::Any.new(Time.utc.to_s)
             }
+
+            # Try to preserve original metadata safely
+            begin
+              error_metadata["original_metadata"] = JSON::Any.new(metadata.to_json)
+            rescue
+              error_metadata["original_metadata"] = JSON::Any.new("{}")
+            end
+
+            error_metadata
           end
         end
       end

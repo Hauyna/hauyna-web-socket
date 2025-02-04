@@ -1,21 +1,14 @@
+require "./presence_manager"
+
 module Hauyna
   module WebSocket
     module Presence
-      @@presence = {} of String => Hash(String, JSON::Any)
-      @@operation_channel = ::Channel(PresenceOperation).new
-      @@mutex = Mutex.new
+      extend self
 
-      # Iniciar el procesador de operaciones
-      spawn do
-        loop do
-          operation = @@operation_channel.receive
-          process_operation(operation)
-        end
-      end
-
-      # API pública
-      def self.track(identifier : String, metadata : Hash(String, JSON::Any))
-        @@operation_channel.send(
+      def track(identifier : String, metadata : Hash(String, JSON::Any))
+        return unless PresenceManager.instance.processor_fiber?
+        
+        PresenceManager.instance.operation_channel.send(
           PresenceOperation.new(:track, {
             identifier: identifier,
             metadata:   metadata,
@@ -23,16 +16,20 @@ module Hauyna
         )
       end
 
-      def self.untrack(identifier : String)
-        @@operation_channel.send(
+      def untrack(identifier : String)
+        return unless PresenceManager.instance.processor_fiber?
+        
+        PresenceManager.instance.operation_channel.send(
           PresenceOperation.new(:untrack, {
             identifier: identifier,
           }.as(PresenceOperation::UntrackData))
         )
       end
 
-      def self.update(identifier : String, metadata : Hash(String, JSON::Any))
-        @@operation_channel.send(
+      def update(identifier : String, metadata : Hash(String, JSON::Any))
+        return unless PresenceManager.instance.processor_fiber?
+        
+        PresenceManager.instance.operation_channel.send(
           PresenceOperation.new(:update, {
             identifier: identifier,
             metadata:   metadata,
@@ -40,16 +37,13 @@ module Hauyna
         )
       end
 
-      private def self.process_operation(operation : PresenceOperation)
-        @@mutex.synchronize do
-          case operation.type
-          when :track
-            internal_track(operation.identifier, operation.metadata)
-          when :untrack
-            internal_untrack(operation.identifier)
-          when :update
-            internal_update(operation.identifier, operation.metadata)
-          end
+      def cleanup_all
+        PresenceManager.instance.cleanup
+      end
+
+      def list : Hash(String, Hash(String, JSON::Any))
+        PresenceManager.instance.mutex.synchronize do
+          PresenceManager.instance.presence.dup
         end
       end
     end

@@ -4,6 +4,7 @@ describe "Concurrency Operations" do
   before_each do
     # Reset channel state before each test
     Hauyna::WebSocket::Channel.cleanup_all
+    Hauyna::WebSocket::Presence.cleanup_all if Hauyna::WebSocket::Presence.responds_to?(:cleanup_all)
   end
 
   it "handles concurrent channel operations safely" do

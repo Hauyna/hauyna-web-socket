@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.2] - 2024-02-04
+
+### Changed
+- Refactorizado el sistema de presencia usando patrón Singleton
+  - Implementado `PresenceManager` como clase central
+  - Mejorada la gestión de estado con `class_property`
+  - Optimizado el manejo de canales de operaciones
+  - Mejor encapsulación del estado global
+  - Operaciones thread-safe mejoradas
+
+### Added
+- Nuevo sistema de gestión centralizada con `PresenceManager`
+  - Buffer configurable para operaciones (CHANNEL_BUFFER_SIZE)
+  - Mejor control del ciclo de vida del procesador
+  - Gestión mejorada de recursos
+  - API más clara y consistente
+  - Mejor manejo de errores y logging
+
+### Technical Improvements
+- Separación clara de responsabilidades entre módulos
+- Mejor organización del código en archivos especializados
+- Reducción del acoplamiento entre componentes
+- Mejor testabilidad y mantenibilidad
+- Operaciones más predecibles y seguras
+
 ## [1.0.1] - 2024-02-03
 
 ### Fixed

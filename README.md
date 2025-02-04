@@ -32,7 +32,7 @@ Añade esto a tu `shard.yml`:
 dependencies:
   hauyna-web-socket:
     github: hauyna/hauyna-web-socket
-    version: ~> 1.0.1
+    version: ~> 1.0.2
 ```
 
 ## Uso Básico
@@ -89,10 +89,12 @@ server.listen(8080)
 
 - 🚀 **Alto Rendimiento**: Diseñado para manejar miles de conexiones concurrentes
 - 📡 **Sistema de Canales**: Suscripciones y broadcast en tiempo real
-- 👥 **Sistema de Presencia**: Tracking de usuarios con metadatos
+- 👥 **Sistema de Presencia**: Tracking de usuarios con metadatos y gestión centralizada
 - 🔄 **Gestión de Conexiones**: Grupos, mensajes directos y broadcast
 - ❤️ **Características Pro**: Heartbeat, reconexión automática, manejo de errores
-- 🔒 **Thread-Safe**: Operaciones seguras con mutex
+- 🔒 **Thread-Safe**: Operaciones seguras con mutex y gestión centralizada
+- 🎯 **Gestión Centralizada**: Sistema de presencia optimizado con patrón Singleton
+- 📊 **Monitoreo Mejorado**: Buffer configurable y mejor control de recursos
 
 ## Características Principales
 
@@ -325,148 +327,62 @@ handler = Hauyna::WebSocket::Handler.new(
 
 ### Sistema de Presencia
 
-El sistema de presencia permite rastrear usuarios conectados y su estado en tiempo real:
+El sistema de presencia permite rastrear usuarios conectados y su estado en tiempo real, ahora con gestión centralizada:
 
 ```crystal
 require "hauyna-web-socket"
 
-# Configurar el handler con sistema de presencia
+# Configurar el handler con sistema de presencia mejorado
 handler = Hauyna::WebSocket::Handler.new(
   extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) : String {
     user_id = params["user_id"]?.try(&.as_s)
-    return "anonymous" unless user_id # Retornamos un valor por defecto en lugar de nil
+    return "anonymous" unless user_id
     
-    # Tracking inicial
+    # Tracking con metadata
     metadata = {
-      "status" => JSON::Any.new("online")
+      "status" => JSON::Any.new("online"),
+      "channel" => JSON::Any.new("general"),
+      "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
     } of String => JSON::Any
     
-    # Añadir metadata adicional si está presente
-    if meta = params["metadata"]?.try(&.as_h)
-      meta.each do |k, v|
-        metadata[k] = v
-      end
-    end
-    
+    # Tracking a través del PresenceManager
     Hauyna::WebSocket::Presence.track(user_id, metadata)
-    
-    # Suscribir a canal con presencia
-    Hauyna::WebSocket::Channel.subscribe("chat", socket, user_id, {
-      "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
-    } of String => JSON::Any)
     
     user_id
   }
 )
 
-# Obtener lista de usuarios presentes en un canal
-presence_data = Hauyna::WebSocket::Channel.presence_data("chat_room")
-# Retorna:
-# {
-#   "user123" => {
-#     "user_id": "user123",
-#     "metadata": {
-#       "status": "online",
-#       "user_name": "John",
-#       "joined_at": "1634567890123"
-#     },
-#     "state": "connected",
-#     "connected_at": "1634567890123"
-#   },
-#   ...
-# }
+# Consultas optimizadas de presencia
+presence_data = Hauyna::WebSocket::Presence.list
+users_in_channel = Hauyna::WebSocket::Presence.list_by_channel("general")
+is_online = Hauyna::WebSocket::Presence.present?("user123")
+user_count = Hauyna::WebSocket::Presence.count
 
-# Actualizar metadata de presencia
+# Actualización thread-safe de metadata
 Hauyna::WebSocket::Presence.update("user123", {
   "status" => JSON::Any.new("away"),
   "last_activity" => JSON::Any.new(Time.local.to_unix_ms.to_s)
 })
 
-# Suscribirse a cambios de presencia
+# Monitoreo de cambios de presencia
 Hauyna::WebSocket::Events.on("presence_change") do |socket, data|
   case data["event"]?.try(&.as_s)
   when "join"
     puts "Usuario #{data["user_id"]} se unió"
-  when "leave" 
+  when "leave"
     puts "Usuario #{data["user_id"]} se fue"
   when "update"
     puts "Usuario #{data["user_id"]} actualizó su estado"
   end
 end
 
-# Características del sistema de presencia:
-# - Tracking en tiempo real de usuarios conectados
-# - Metadata personalizable por usuario
-# - Estados de conexión (online, offline, away)
-# - Timestamps de actividad
-# - Limpieza automática de usuarios desconectados
-# - Eventos de cambios de presencia
-# - Agrupación por canales
-# - Thread-safe
-
-# Ejemplo de uso con canales
-handler = Hauyna::WebSocket::Handler.new(
-  extract_identifier: ->(socket : HTTP::WebSocket, params : JSON::Any) : String {
-    user_id = params["user_id"]?.try(&.as_s)
-    return "anonymous" unless user_id # Retornamos un valor por defecto en lugar de nil
-    
-    # Tracking inicial
-    metadata = {
-      "status" => JSON::Any.new("online")
-    } of String => JSON::Any
-    
-    # Añadir metadata adicional si está presente
-    if meta = params["metadata"]?.try(&.as_h)
-      meta.each do |k, v|
-        metadata[k] = v
-      end
-    end
-    
-    Hauyna::WebSocket::Presence.track(user_id, metadata)
-    
-    # Suscribir a canal con presencia
-    Hauyna::WebSocket::Channel.subscribe("chat", socket, user_id, {
-      "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
-    } of String => JSON::Any)
-    
-    user_id
-  },
-  
-  on_close: ->(socket : HTTP::WebSocket) {
-    # Cleanup automático de presencia al desconectar
-    if user_id = Hauyna::WebSocket::ConnectionManager.get_identifier(socket)
-      Hauyna::WebSocket::Presence.untrack(user_id)
-    end
-  }
-)
-
-# Helper para contar usuarios por estado
-def count_users_by_state : Hash(String, Int32)
-  presence_list = Hauyna::WebSocket::Presence.list
-  users_by_state = {} of String => Int32
-  
-  presence_list.each do |_, data|
-    state = data["state"]?.try(&.as_s) || "unknown"
-    users_by_state[state] ||= 0
-    users_by_state[state] += 1
-  end
-  
-  users_by_state
-end
-
-# Uso del helper en el monitoreo
-spawn do
-  loop do
-    total_users = Hauyna::WebSocket::Presence.count
-    users_by_state = count_users_by_state
-    
-    puts "Usuarios totales: #{total_users}"
-    puts "Por estado: #{users_by_state}"
-    
-    sleep 60.seconds
-  end
-end
-
+# Características del sistema de presencia mejorado:
+# - Gestión centralizada con PresenceManager
+# - Buffer configurable para operaciones
+# - Mejor control del ciclo de vida
+# - API más clara y consistente
+# - Operaciones thread-safe optimizadas
+# - Mejor manejo de errores y logging
 ```
 
 

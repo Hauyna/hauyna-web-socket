@@ -4,12 +4,12 @@
 
 ### Prioridad Alta
 - [ ] **Mejoras en Testing**
-  - [ ] Aumentar cobertura de pruebas
-  - [ ] Pruebas de integración avanzadas
   - [x] Pruebas de concurrencia exhaustivas
-    - [x] Pruebas de operaciones concurrentes en presencia
-    - [x] Validación de estados en concurrencia
-    - [ ] Pruebas de carga concurrente
+    - [x] Testing de operaciones lock-free
+    - [x] Verificación de métricas atómicas
+    - [x] Pruebas de procesamiento por lotes
+  - [ ] Pruebas de rendimiento bajo carga
+  - [ ] Pruebas de escenarios de fallo
   - [ ] Pruebas de timeouts y heartbeat
   - [x] Pruebas de manejo de errores
     - [x] IO::Error
@@ -18,8 +18,6 @@
     - [x] Errores de metadatos
     - [x] Validación de JSON en campos
     - [x] Estados de error en presencia
-  - [ ] Pruebas de escenarios de fallo
-  - [ ] Pruebas de rendimiento bajo carga
 
 ### Características Implementadas ✅
 - [x] **Sistema de Gestión Centralizada**
@@ -78,6 +76,22 @@
   - [x] Concurrencia robusta en **ConnectionManager**, **Channel** y **Presence**
   - [x] Limpieza automática con `CleanupOperation`
   - [x] Thread-safety en operaciones críticas
+
+- [x] **Sistema de Limpieza Optimizado**
+  - [x] Cola lock-free implementada
+  - [x] Métricas atómicas
+  - [x] Procesamiento por lotes
+  - [x] Sistema de reintentos
+  - [x] Monitoreo en tiempo real
+  - [x] Testing helpers
+
+- [x] **Mejoras en Concurrencia**
+  - [x] Operaciones lock-free
+  - [x] RWLock optimizado
+  - [x] Métricas thread-safe
+  - [x] Procesamiento por lotes
+  - [x] Manejo de errores robusto
+  - [x] Testing de concurrencia
 
 ## Versión [1.2.0]
 

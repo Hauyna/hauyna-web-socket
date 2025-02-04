@@ -19,6 +19,7 @@ Biblioteca Crystal ligera y rápida para WebSockets en tiempo real. Simple pero 
    - [Sistema de Presencia](#sistema-de-presencia)
    - [Grupos y Mensajes Directos](#grupos-y-mensajes-directos)
    - [Manejo de Eventos](#manejo-de-eventos)
+   - [Sistema de Limpieza Optimizado](#sistema-de-limpieza-optimizado)
 5. [Ejemplos](#ejemplos)
 6. [Contribuir](#contribuir)
 7. [Autores](#autores)
@@ -32,7 +33,7 @@ Añade esto a tu `shard.yml`:
 dependencies:
   hauyna-web-socket:
     github: hauyna/hauyna-web-socket
-    version: ~> 1.0.2
+    version: ~> 1.0.3
 ```
 
 ## Uso Básico
@@ -95,6 +96,7 @@ server.listen(8080)
 - 🔒 **Thread-Safe**: Operaciones seguras con mutex y gestión centralizada
 - 🎯 **Gestión Centralizada**: Sistema de presencia optimizado con patrón Singleton
 - 📊 **Monitoreo Mejorado**: Buffer configurable y mejor control de recursos
+- 🧹 **Limpieza Optimizada**: Sistema lock-free con métricas atómicas y procesamiento por lotes
 
 ## Características Principales
 
@@ -475,6 +477,207 @@ Hauyna::WebSocket::Events.on("message_received") do |socket, data|
     })
   end
 end
+```
+
+## Sistema de Limpieza Optimizado
+
+### Configuración Básica
+
+```crystal
+require "hauyna-web-socket"
+
+# Configuración básica del sistema de limpieza
+handler = Hauyna::WebSocket::Handler.new(
+  cleanup_batch_size: 50,        # Tamaño del lote de procesamiento
+  cleanup_interval: 0.1,         # Intervalo entre lotes (segundos)
+  max_cleanup_retries: 3,        # Máximo de reintentos
+  on_cleanup_error: ->(error : Exception) {
+    Log.error { "Error durante limpieza: #{error.message}" }
+  }
+)
+```
+
+### Monitoreo y Métricas
+
+```crystal
+# Obtener métricas en tiempo real
+metrics = Channel.cleanup_metrics
+
+# Monitorear operaciones
+puts "Estado del sistema de limpieza:"
+puts "✓ Operaciones procesadas: #{metrics[:processed_count]}"
+puts "✗ Errores encontrados: #{metrics[:error_count]}"
+puts "□ Tamaño actual de cola: #{metrics[:queue_size]}"
+puts "⌚ Tiempo promedio: #{metrics[:avg_process_time]}s"
+
+# Configurar alertas basadas en métricas
+if metrics[:error_count] > threshold
+  notify_admin("Alto número de errores en limpieza")
+end
+
+if metrics[:queue_size] > max_queue_size
+  scale_resources("Cola de limpieza saturada")
+end
+```
+
+### Manejo de Errores y Reintentos
+
+```crystal
+# Configurar manejo de errores personalizado
+handler = Hauyna::WebSocket::Handler.new(
+  on_cleanup_error: ->(error : Exception, operation : CleanupOperation) {
+    case error
+    when IO::Error
+      Log.error { "Error de E/S durante limpieza: #{error.message}" }
+      notify_admin("Error crítico de limpieza")
+    when Socket::Error
+      Log.warn { "Error de socket: #{error.message}" }
+      retry_operation(operation)
+    else
+      Log.error { "Error no esperado: #{error.message}" }
+    end
+  },
+  
+  # Política de reintentos personalizada
+  cleanup_retry_policy: {
+    max_attempts: 5,
+    base_delay: 1.seconds,
+    max_delay: 30.seconds,
+    backoff_multiplier: 2.0
+  }
+)
+```
+
+### Procesamiento por Lotes
+
+```crystal
+# Configurar procesamiento por lotes
+handler = Hauyna::WebSocket::Handler.new(
+  # Configuración de lotes
+  cleanup_batch_size: 50,        # Tamaño máximo del lote
+  cleanup_interval: 0.1,         # Intervalo entre procesamiento
+  
+  # Callbacks de procesamiento
+  on_batch_start: ->(batch_size : Int32) {
+    Log.info { "Iniciando procesamiento de lote: #{batch_size} operaciones" }
+  },
+  
+  on_batch_complete: ->(processed : Int32, errors : Int32) {
+    Log.info { "Lote completado - Procesadas: #{processed}, Errores: #{errors}" }
+  }
+)
+```
+
+### Testing y Desarrollo
+
+```crystal
+{% if flag?(:test) %}
+# Simular operaciones concurrentes
+Channel.testing_helper.simulate_concurrent_operations(100) do
+  # Simular desconexiones
+  socket = MockWebSocket.new
+  Channel.cleanup_socket(socket)
+end
+
+# Verificar métricas después de pruebas
+metrics = Channel.cleanup_metrics
+assert metrics[:processed_count] == 100
+assert metrics[:error_count] == 0
+
+# Pruebas de carga
+Channel.testing_helper.simulate_concurrent_operations(1000, parallel: 10) do
+  # Operaciones de prueba
+end
+{% end %}
+```
+
+### Ejemplos de Uso Real
+
+1. **Limpieza Automática en Desconexión**
+```crystal
+handler = Hauyna::WebSocket::Handler.new(
+  on_close: ->(socket : HTTP::WebSocket) {
+    # La limpieza se maneja automáticamente
+    puts "Conexión cerrada, iniciando limpieza..."
+  }
+)
+```
+
+2. **Limpieza Manual**
+```crystal
+# Trigger manual de limpieza
+socket = HTTP::WebSocket.new(url)
+Channel.cleanup_socket(socket)
+
+# Esperar confirmación de limpieza
+sleep 0.2.seconds
+metrics = Channel.cleanup_metrics
+puts "Limpieza completada" if metrics[:processed_count] > 0
+```
+
+3. **Monitoreo Continuo**
+```crystal
+# Crear un monitor de métricas
+spawn do
+  loop do
+    metrics = Channel.cleanup_metrics
+    if metrics[:queue_size] > 100
+      Log.warn { "Cola de limpieza creciendo: #{metrics[:queue_size]}" }
+    end
+    sleep 5.seconds
+  end
+end
+```
+
+### Mejores Prácticas
+
+1. **Configuración Óptima**
+```crystal
+# Para sistemas pequeños
+handler = Hauyna::WebSocket::Handler.new(
+  cleanup_batch_size: 20,
+  cleanup_interval: 0.2,
+  max_cleanup_retries: 2
+)
+
+# Para sistemas grandes
+handler = Hauyna::WebSocket::Handler.new(
+  cleanup_batch_size: 100,
+  cleanup_interval: 0.05,
+  max_cleanup_retries: 5
+)
+```
+
+2. **Monitoreo Efectivo**
+```crystal
+# Implementar sistema de alertas
+def monitor_cleanup_system
+  previous_metrics = Channel.cleanup_metrics
+  
+  spawn do
+    loop do
+      current_metrics = Channel.cleanup_metrics
+      
+      # Alertar si hay incremento significativo de errores
+      if current_metrics[:error_count] - previous_metrics[:error_count] > 10
+        alert_admin("Incremento significativo de errores en limpieza")
+      end
+      
+      previous_metrics = current_metrics
+      sleep 1.minute
+    end
+  end
+end
+```
+
+3. **Manejo de Recursos**
+```crystal
+# Configurar límites seguros
+handler = Hauyna::WebSocket::Handler.new(
+  cleanup_queue_size: 1000,           # Límite de cola
+  cleanup_memory_threshold: 100.MB,    # Límite de memoria
+  cleanup_cpu_threshold: 0.8           # Límite de CPU
+)
 ```
 
 ## Ejemplos

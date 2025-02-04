@@ -9,27 +9,38 @@ module Hauyna
           send_error(socket, "parse_error", "Formato de mensaje inválido")
         when IO::Error
           send_error(socket, "connection_error", "Error de conexión")
+          cleanup_resources(socket)
           socket.close(1006)
         when Socket::Error
           send_error(socket, "socket_error", "Error en el socket")
+          cleanup_resources(socket)
+          socket.close(1006)
         when RuntimeError
           Log.error { "Error de ejecución: #{error.message}\n#{error.backtrace?.try &.join("\n")}" }
           send_error(socket, "runtime_error", "Error durante la ejecución")
+          cleanup_resources(socket)
         when ArgumentError
           send_error(socket, "argument_error", "Argumentos inválidos en la operación")
+          cleanup_resources(socket)
         when IndexError
           send_error(socket, "index_error", "Error de acceso a índice")
+          cleanup_resources(socket)
         when KeyError
           send_error(socket, "key_error", "Error de acceso a clave")
+          cleanup_resources(socket)
         when TypeCastError
           send_error(socket, "type_error", "Error de conversión de tipo")
+          cleanup_resources(socket)
         when DivisionByZeroError
           send_error(socket, "arithmetic_error", "Error aritmético")
+          cleanup_resources(socket)
         when OverflowError
           send_error(socket, "overflow_error", "Error de desbordamiento")
+          cleanup_resources(socket)
         else
           log_error(error, "Error no manejado")
           send_error(socket, "internal_error", "Error interno del servidor")
+          cleanup_resources(socket)
         end
       end
 
@@ -45,6 +56,13 @@ module Hauyna
         else
           log_error(error, "Error inesperado en presencia")
         end
+      end
+
+      private def self.cleanup_resources(socket : HTTP::WebSocket)
+        # Trigger channel cleanup using public method
+        Channel.cleanup_socket(socket)
+        # Unregister from connection manager
+        ConnectionManager.unregister(socket)
       end
 
       private def self.send_error(socket : HTTP::WebSocket, type : String, message : String)

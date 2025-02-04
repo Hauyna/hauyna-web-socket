@@ -190,3 +190,31 @@
 - README con ejemplos básicos
 - Documentación inline de código
 - Guía de contribución básica
+
+## [1.0.3] - 2024-02-04
+
+### Added
+- Sistema de limpieza optimizado con operaciones lock-free
+  - Implementado `LockFreeQueue` para operaciones sin bloqueo
+  - Sistema de métricas atómicas para mejor rendimiento
+  - Procesamiento por lotes configurable
+  - Sistema de reintentos robusto
+  - Monitoreo en tiempo real
+  - Testing helpers para concurrencia
+
+### Changed
+- Refactorizado el sistema de limpieza de recursos
+  - Mejor manejo de concurrencia con operaciones atómicas
+  - Optimización de locks con RWLock
+  - Procesamiento por lotes eficiente
+  - Métricas thread-safe
+  - Mejor gestión de memoria
+  - Sistema de reintentos mejorado
+
+### Technical Improvements
+- Implementación de cola lock-free para mejor rendimiento
+- Sistema de métricas atómicas para monitoreo preciso
+- Optimización de locks con RWLock para mejor concurrencia
+- Procesamiento por lotes para mejor eficiencia
+- Testing helpers para verificación de concurrencia
+- Mejor manejo de errores y reintentos

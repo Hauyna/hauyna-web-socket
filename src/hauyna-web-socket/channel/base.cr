@@ -1,11 +1,164 @@
 module Hauyna
   module WebSocket
     class Channel
-      # Operación específica para cleanup
+      # Constantes de configuración
+      private CLEANUP_BATCH_SIZE    = 50    # Número máximo de canales a procesar por lote
+      private CLEANUP_QUEUE_SIZE    = 1000  # Tamaño máximo de la cola de limpieza
+      private CLEANUP_INTERVAL      = 0.1   # Intervalo entre procesamiento de lotes (segundos)
+      private MAX_CLEANUP_RETRIES   = 3     # Máximo número de reintentos por operación
+
+      # Lock-free queue para operaciones
+      private class LockFreeQueue(T)
+        @head : Atomic(Node(T)?)
+        @tail : Atomic(Node(T)?)
+
+        private class Node(T)
+          property next : Atomic(Node(T)?)
+          property value : T
+
+          def initialize(@value : T)
+            @next = Atomic(Node(T)?).new(nil)
+          end
+        end
+
+        def initialize
+          @head = Atomic(Node(T)?).new(nil)
+          @tail = Atomic(Node(T)?).new(nil)
+        end
+
+        def push(value : T)
+          node = Node.new(value)
+          loop do
+            tail = @tail.get
+            if tail.nil?
+              if @head.compare_and_set(nil, node)
+                @tail.set(node)
+                break
+              end
+            else
+              next_tail = tail.next.get
+              if next_tail.nil?
+                if tail.next.compare_and_set(nil, node)
+                  @tail.compare_and_set(tail, node)
+                  break
+                end
+              else
+                @tail.compare_and_set(tail, next_tail)
+              end
+            end
+          end
+        end
+
+        def pop? : T?
+          loop do
+            head = @head.get
+            return nil if head.nil?
+            next_head = head.next.get
+            if @head.compare_and_set(head, next_head)
+              if next_head.nil?
+                @tail.compare_and_set(head, nil)
+              end
+              return head.value
+            end
+          end
+        end
+
+        def empty? : Bool
+          @head.get.nil?
+        end
+      end
+
+      # Optimización de locks con RWLock
+      private class OptimizedLock
+        @readers : Atomic(Int32)
+        @writer_waiting : Atomic(Bool)
+        @mutex : Mutex
+
+        def initialize
+          @readers = Atomic(Int32).new(0)
+          @writer_waiting = Atomic(Bool).new(false)
+          @mutex = Mutex.new
+        end
+
+        def read
+          while @writer_waiting.get
+            Fiber.yield
+          end
+          @readers.add(1)
+          begin
+            yield
+          ensure
+            @readers.sub(1)
+          end
+        end
+
+        def write
+          @writer_waiting.set(true)
+          @mutex.synchronize do
+            while @readers.get > 0
+              Fiber.yield
+            end
+            yield
+          ensure
+            @writer_waiting.set(false)
+          end
+        end
+      end
+
+      # Reemplazar colas y locks tradicionales con versiones optimizadas
+      @@cleanup_queue = LockFreeQueue(CleanupOperation).new
+      @@channels_lock = OptimizedLock.new
+      @@metrics_lock = OptimizedLock.new
+
+      # Métricas de limpieza con acceso optimizado
+      private class AtomicMetrics
+        property processed_count : Atomic(Int64)
+        property error_count : Atomic(Int64)
+        property queue_size : Atomic(Int64)
+        @process_time_sum : Atomic(Int64) # Almacenamos los microsegundos
+        @process_time_mutex : Mutex
+
+        def initialize
+          @processed_count = Atomic(Int64).new(0)
+          @error_count = Atomic(Int64).new(0)
+          @queue_size = Atomic(Int64).new(0)
+          @process_time_sum = Atomic(Int64).new(0)
+          @process_time_mutex = Mutex.new
+        end
+
+        def add_process_time(seconds : Float64)
+          microseconds = (seconds * 1_000_000).to_i64
+          @process_time_sum.add(microseconds)
+        end
+
+        def avg_process_time : Float64
+          count = @processed_count.get
+          return 0.0 if count == 0
+          
+          @process_time_mutex.synchronize do
+            total_microseconds = @process_time_sum.get
+            (total_microseconds.to_f64 / count.to_f64) / 1_000_000
+          end
+        end
+      end
+
+      @@metrics = AtomicMetrics.new
+
+      # Operación específica para cleanup con reintentos
       private class CleanupOperation
         getter socket : HTTP::WebSocket
+        property retries : Int32 = 0
+        property channels_pending : Set(String)? = nil
 
         def initialize(@socket)
+        end
+
+        def increment_retry
+          @retries += 1
+        end
+
+        def max_retries_reached?
+          @retries >= MAX_CLEANUP_RETRIES
         end
       end
 
@@ -53,24 +206,17 @@ module Hauyna
       end
 
       private def self.process_cleanup(operation : CleanupOperation)
-        channels_to_cleanup = [] of String
-
         @@mutex.synchronize do
+          # Limpiar directamente todas las suscripciones del socket
           @@channels.each do |channel, subs|
-            if subs.any? { |s| s.socket == operation.socket }
-              channels_to_cleanup << channel
+            # Crear un nuevo set sin las suscripciones del socket
+            new_subs = Set.new(subs.reject { |s| s.socket == operation.socket })
+            if new_subs.empty?
+              @@channels.delete(channel)
+            else
+              @@channels[channel] = new_subs
             end
           end
-        end
-
-        # Procesar unsubscribe para cada canal fuera del lock principal
-        channels_to_cleanup.each do |channel|
-          @@operation_channel.send(
-            ChannelOperation.new(:unsubscribe, {
-              channel: channel,
-              socket:  operation.socket,
-            }.as(ChannelOperation::UnsubscribeData))
-          )
         end
       end
 
@@ -194,9 +340,169 @@ module Hauyna
         end
       end
 
+      # Método público mejorado para cleanup
       def self.cleanup_socket(socket : HTTP::WebSocket)
-        @@operation_channel.send(CleanupOperation.new(socket))
+        enqueue_cleanup(socket)
+        ensure_cleanup_processor_running
       end
+
+      # Encolar operación de limpieza usando lock-free queue
+      private def self.enqueue_cleanup(socket : HTTP::WebSocket)
+        operation = CleanupOperation.new(socket)
+        @@cleanup_queue.push(operation)
+        update_metric(:queue_size, 1)
+      end
+
+      # Asegurar que el procesador está corriendo
+      private def self.ensure_cleanup_processor_running
+        @@cleanup_mutex.synchronize do
+          unless @@cleanup_running
+            @@cleanup_running = true
+            spawn do
+              process_cleanup_queue
+            end
+          end
+        end
+      end
+
+      # Procesador principal de la cola de limpieza
+      private def self.process_cleanup_queue
+        loop do
+          batch = get_next_batch
+
+          if batch.empty?
+            @@cleanup_mutex.synchronize { @@cleanup_running = false }
+            break
+          end
+
+          process_cleanup_batch(batch)
+          sleep CLEANUP_INTERVAL
+        end
+      end
+
+      # Obtener siguiente lote de operaciones
+      private def self.get_next_batch
+        @@cleanup_mutex.synchronize do
+          batch = [] of CleanupOperation
+          while batch.size < CLEANUP_BATCH_SIZE && !@@cleanup_queue.empty?
+            batch << @@cleanup_queue.pop
+          end
+          update_metric(:queue_size, @@cleanup_queue.empty? ? 0 : @@cleanup_queue.size)
+          batch
+        end
+      end
+
+      # Procesar un lote de operaciones de limpieza
+      private def self.process_cleanup_batch(batch : Array(CleanupOperation))
+        batch.each do |operation|
+          start_time = Time.monotonic
+          
+          begin
+            if operation.channels_pending.nil?
+              @@channels_lock.read do
+                channels_to_process = identify_channels_to_cleanup(operation.socket)
+                operation.channels_pending = channels_to_process
+              end
+            end
+
+            cleanup_channels(operation)
+            
+            process_time = Time.monotonic - start_time
+            update_metric(:processed_count, 1)
+            update_metric(:avg_process_time, process_time.total_seconds)
+          rescue ex
+            handle_cleanup_error(operation, ex)
+          end
+        end
+      end
+
+      # Identificar canales que necesitan limpieza
+      private def self.identify_channels_to_cleanup(socket : HTTP::WebSocket) : Set(String)
+        @@mutex.synchronize do
+          @@channels.keys.select do |channel|
+            @@channels[channel].any? { |s| s.socket == socket }
+          end.to_set
+        end
+      end
+
+      # Limpiar canales para una operación
+      private def self.cleanup_channels(operation : CleanupOperation)
+        return unless pending = operation.channels_pending
+
+        pending.each do |channel|
+          @@mutex.synchronize do
+            if subs = @@channels[channel]?
+              new_subs = Set.new(subs.reject { |s| s.socket == operation.socket })
+              if new_subs.empty?
+                @@channels.delete(channel)
+              else
+                @@channels[channel] = new_subs
+              end
+            end
+          end
+          pending.delete(channel)
+        end
+      end
+
+      # Manejar errores durante la limpieza
+      private def self.handle_cleanup_error(operation : CleanupOperation, error : Exception)
+        update_metric(:error_count, 1)
+        Log.error { "Error durante limpieza: #{error.message}" }
+        
+        if !operation.max_retries_reached?
+          operation.increment_retry
+          @@cleanup_mutex.synchronize do
+            @@cleanup_queue.push(operation)
+          end
+        else
+          Log.error { "Máximo de reintentos alcanzado para socket: #{operation.socket.object_id}" }
+        end
+      end
+
+      # Actualizar métricas de forma atómica
+      private def self.update_metric(metric : Symbol, value : Int32 | Int64 | Float64)
+        case metric
+        when :processed_count
+          @@metrics.processed_count.add(value.to_i64)
+        when :error_count
+          @@metrics.error_count.add(value.to_i64)
+        when :queue_size
+          @@metrics.queue_size.set(value.to_i64)
+        when :avg_process_time
+          @@metrics.add_process_time(value.to_f64)
+        end
+      end
+
+      # Obtener métricas de forma thread-safe
+      def self.cleanup_metrics
+        {
+          processed_count:  @@metrics.processed_count.get,
+          error_count:     @@metrics.error_count.get,
+          queue_size:      @@metrics.queue_size.get,
+          avg_process_time: @@metrics.avg_process_time,
+        }
+      end
+
+      # Testing helpers para verificar concurrencia
+      {% if flag?(:test) %}
+        def self.testing_helper
+          TestingHelper
+        end
+
+        private module TestingHelper
+          extend self
+
+          def simulate_concurrent_operations(count : Int32)
+            operations = Array(Future(Nil)).new(count)
+            count.times do
+              operations << Future.new do
+                yield
+              end
+            end
+            operations.each(&.get)
+          end
+        end
+      {% end %}
     end
   end
 end

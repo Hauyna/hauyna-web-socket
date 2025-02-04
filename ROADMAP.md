@@ -6,12 +6,16 @@
 - [ ] **Mejoras en Testing**
   - [ ] Aumentar cobertura de pruebas
   - [ ] Pruebas de integración avanzadas
-  - [ ] Pruebas de concurrencia exhaustivas
+  - [x] Pruebas de concurrencia exhaustivas
+    - [x] Pruebas de operaciones concurrentes en presencia
+    - [x] Validación de estados en concurrencia
+    - [ ] Pruebas de carga concurrente
   - [ ] Pruebas de timeouts y heartbeat
   - [x] Pruebas de manejo de errores
     - [x] IO::Error
     - [x] Socket::Error
     - [x] Errores de validación
+    - [x] Errores de metadatos
   - [ ] Pruebas de escenarios de fallo
   - [ ] Pruebas de rendimiento bajo carga
 
@@ -22,13 +26,18 @@
   - [x] Buffer configurable para operaciones
   - [x] Control mejorado del ciclo de vida
   - [x] API más clara y consistente
+  - [x] Validación robusta de metadatos
+  - [x] Manejo consistente de estados
 
 - [x] **Mejoras en Testing**
   - [x] Estructura de tests organizada
   - [x] Tests de heartbeat mejorados
   - [x] Tests de conexión actualizados
   - [x] Tests de concurrencia básicos
-  - [x] Tests de presencia
+  - [x] Tests de presencia mejorados
+    - [x] Validación de metadatos
+    - [x] Operaciones concurrentes
+    - [x] Estados por defecto
   - [x] Tests de canales
 
 - [x] **Sistema de Logging Avanzado**

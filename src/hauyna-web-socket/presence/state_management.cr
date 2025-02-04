@@ -12,6 +12,8 @@ module Hauyna
         DISCONNECTED: "disconnected"
       }
 
+      REQUIRED_METADATA_FIELDS = ["status"]
+
       extend self
 
       def list_by_channel(channel : String) : Hash(String, Hash(String, JSON::Any))
@@ -23,6 +25,11 @@ module Hauyna
               begin
                 parsed_metadata = JSON.parse(metadata).as_h
                 if parsed_metadata["channel"]?.try(&.as_s) == channel
+                  # Ensure required fields exist
+                  REQUIRED_METADATA_FIELDS.each do |field|
+                    parsed_metadata[field] = JSON::Any.new("online") unless parsed_metadata[field]?
+                  end
+                  data["metadata"] = JSON::Any.new(parsed_metadata.to_json)
                   presence_data[identifier] = data
                 end
               rescue ex
@@ -33,6 +40,15 @@ module Hauyna
           
           presence_data
         end
+      end
+
+      def validate_metadata(metadata : Hash(String, JSON::Any))
+        REQUIRED_METADATA_FIELDS.each do |field|
+          unless metadata[field]?
+            metadata[field] = JSON::Any.new("online")
+          end
+        end
+        metadata
       end
 
       def present?(identifier : String) : Bool
@@ -92,27 +108,17 @@ module Hauyna
 
       private def handle_presence_error(identifier : String, error : Exception)
         set_error_state(identifier, error)
+        Log.error { "Presence error for #{identifier}: #{error.message}" }
       end
 
       private def set_error_state(identifier : String, error : Exception)
         PresenceManager.instance.mutex.synchronize do
           if current = PresenceManager.instance.presence[identifier]?
-            begin
-              current_metadata = JSON.parse(current["metadata"].as_s).as_h
-            rescue
-              current_metadata = {} of String => JSON::Any
-            end
-
-            error_metadata = current_metadata.merge({
-              "state" => JSON::Any.new(STATES[:ERROR]),
-              "error_at" => JSON::Any.new(Time.local.to_unix_ms.to_s),
-              "error_message" => JSON::Any.new(error.message || "Unknown error")
-            })
-
-            PresenceManager.instance.presence[identifier] = {
-              "metadata" => JSON::Any.new(error_metadata.to_json),
-              "state" => JSON::Any.new(STATES[:ERROR])
-            }
+            metadata = JSON.parse(current["metadata"].as_s).as_h
+            metadata["status"] = JSON::Any.new("error")
+            metadata["error"] = JSON::Any.new(error.message || "Unknown error")
+            current["metadata"] = JSON::Any.new(metadata.to_json)
+            PresenceManager.instance.presence[identifier] = current
           end
         end
         notify_presence_change

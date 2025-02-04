@@ -93,7 +93,8 @@ describe "Concurrency Operations" do
     # Verify updates were applied
     presence_list = Hauyna::WebSocket::Presence.list
     presence_list.each do |presence_entry|
-      identifier, metadata = presence_entry
+      identifier, data = presence_entry
+      metadata = JSON.parse(data["metadata"].as_s).as_h
       metadata["status"].as_s.should eq("away")
     end
   end

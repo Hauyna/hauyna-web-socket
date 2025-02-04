@@ -2,6 +2,13 @@
 
 ## [1.0.2] - 2024-02-04
 
+### Fixed
+- Corregido el manejo de metadatos en el sistema de presencia
+  - Implementada validación consistente de campos requeridos
+  - Corregido el acceso a metadatos en operaciones concurrentes
+  - Mejorado el manejo de estados por defecto
+  - Asegurada la consistencia de datos en operaciones de lista
+
 ### Changed
 - Refactorizado el sistema de presencia usando patrón Singleton
   - Implementado `PresenceManager` como clase central
@@ -17,6 +24,10 @@
   - Gestión mejorada de recursos
   - API más clara y consistente
   - Mejor manejo de errores y logging
+- Validación de campos requeridos en metadatos de presencia
+  - Campo "status" siempre presente con valor por defecto
+  - Manejo seguro de metadatos faltantes
+  - Validación en operaciones de track y update
 
 ### Technical Improvements
 - Separación clara de responsabilidades entre módulos

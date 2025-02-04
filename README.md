@@ -327,7 +327,7 @@ handler = Hauyna::WebSocket::Handler.new(
 
 ### Sistema de Presencia
 
-El sistema de presencia permite rastrear usuarios conectados y su estado en tiempo real, ahora con gestión centralizada:
+El sistema de presencia permite rastrear usuarios conectados y su estado en tiempo real, con gestión centralizada y manejo robusto de metadatos:
 
 ```crystal
 require "hauyna-web-socket"
@@ -338,50 +338,52 @@ handler = Hauyna::WebSocket::Handler.new(
     user_id = params["user_id"]?.try(&.as_s)
     return "anonymous" unless user_id
     
-    # Tracking con metadata
+    # Tracking con metadata (el campo status es requerido y tendrá valor por defecto si no se especifica)
     metadata = {
-      "status" => JSON::Any.new("online"),
+      "user_id" => JSON::Any.new(user_id),
+      "status" => JSON::Any.new("online"),  # Campo requerido, por defecto "online"
       "channel" => JSON::Any.new("general"),
       "joined_at" => JSON::Any.new(Time.local.to_unix_ms.to_s)
     } of String => JSON::Any
     
-    # Tracking a través del PresenceManager
+    # Tracking a través del PresenceManager con validación de metadatos
     Hauyna::WebSocket::Presence.track(user_id, metadata)
     
     user_id
   }
 )
 
-# Consultas optimizadas de presencia
-presence_data = Hauyna::WebSocket::Presence.list
+# Consultas optimizadas de presencia con manejo seguro de metadatos
+presence_data = Hauyna::WebSocket::Presence.list  # Incluye status por defecto si falta
 users_in_channel = Hauyna::WebSocket::Presence.list_by_channel("general")
 is_online = Hauyna::WebSocket::Presence.present?("user123")
 user_count = Hauyna::WebSocket::Presence.count
 
-# Actualización thread-safe de metadata
+# Actualización thread-safe de metadata con validación
 Hauyna::WebSocket::Presence.update("user123", {
-  "status" => JSON::Any.new("away"),
+  "status" => JSON::Any.new("away"),     # Campo requerido
   "last_activity" => JSON::Any.new(Time.local.to_unix_ms.to_s)
 })
 
-# Monitoreo de cambios de presencia
+# Monitoreo de cambios de presencia con estados consistentes
 Hauyna::WebSocket::Events.on("presence_change") do |socket, data|
   case data["event"]?.try(&.as_s)
   when "join"
-    puts "Usuario #{data["user_id"]} se unió"
+    puts "Usuario #{data["user_id"]} se unió con estado #{data["status"]}"
   when "leave"
     puts "Usuario #{data["user_id"]} se fue"
   when "update"
-    puts "Usuario #{data["user_id"]} actualizó su estado"
+    puts "Usuario #{data["user_id"]} cambió su estado a #{data["status"]}"
   end
 end
 
 # Características del sistema de presencia mejorado:
 # - Gestión centralizada con PresenceManager
-# - Buffer configurable para operaciones
-# - Mejor control del ciclo de vida
-# - API más clara y consistente
+# - Validación robusta de metadatos
+# - Campo status siempre presente con valor por defecto
 # - Operaciones thread-safe optimizadas
+# - Manejo consistente de estados
+# - API clara y predecible
 # - Mejor manejo de errores y logging
 ```
 

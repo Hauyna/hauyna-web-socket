@@ -12,12 +12,17 @@ module Hauyna
         heartbeat_timeout : Time::Span? = nil,
         @read_timeout : Int32 = 30,
         @write_timeout : Int32 = 30,
+        batch_config : BatchProcessing::Config? = nil
       )
         if heartbeat_interval
           @heartbeat = Heartbeat.new(
             interval: heartbeat_interval,
             timeout: heartbeat_timeout || heartbeat_interval * 2
           )
+        end
+
+        if config = batch_config
+          @batch_processor = BatchProcessing::Processor.new(config)
         end
       end
     end

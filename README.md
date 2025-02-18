@@ -352,53 +352,102 @@ handler = Hauyna::WebSocket::Handler.new(
     Hauyna::WebSocket::Presence.track(user_id, metadata)
     
     user_id
+  },
+  
+  on_open: ->(socket : HTTP::WebSocket, params : JSON::Any) {
+    puts "Nueva conexión establecida"
+  },
+  
+  on_message: ->(socket : HTTP::WebSocket, message : JSON::Any) {
+    puts "Mensaje recibido: #{message}"
+    socket.send("Mensaje recibido!")
+  },
+  
+  on_close: ->(socket : HTTP::WebSocket) {
+    puts "Conexión cerrada"
   }
 )
 
 # Consultas optimizadas de presencia con manejo seguro de metadatos
-presence_data = Hauyna::WebSocket::Presence.list  # Incluye status por defecto si falta
-users_in_channel = Hauyna::WebSocket::Presence.list_by_channel("general")
-is_online = Hauyna::WebSocket::Presence.present?("user123")
-user_count = Hauyna::WebSocket::Presence.count
+def print_presence_info
+  presence_data = Hauyna::WebSocket::Presence.list
+  puts "Total usuarios online: #{presence_data.size}"
+  
+  users_in_channel = Hauyna::WebSocket::Presence.list_by_channel("general")
+  puts "Usuarios en canal general: #{users_in_channel.size}"
+  
+  test_user = "user123"
+  if Hauyna::WebSocket::Presence.present?(test_user)
+    puts "#{test_user} está online"
+  end
+end
 
 # Actualización thread-safe de metadata con validación robusta
-Hauyna::WebSocket::Presence.update("user123", {
-  "status" => JSON::Any.new("away"),     # Campo requerido
-  "last_activity" => JSON::Any.new(Time.local.to_unix_ms.to_s),
-  "metadata" => JSON::Any.new({          # Debe ser JSON válido
-    "custom_field" => "value"
-  }.to_json)
-})
+def update_user_status(user_id : String, status : String)
+  begin
+    Hauyna::WebSocket::Presence.update(user_id, {
+      "status" => JSON::Any.new(status),
+      "last_activity" => JSON::Any.new(Time.local.to_unix_ms.to_s)
+    })
+    puts "Estado actualizado correctamente para #{user_id}"
+  rescue ex : Exception
+    puts "Error al actualizar estado: #{ex.message}"
+  end
+end
 
 # Manejo de errores en presencia
-begin
-  # Intentar actualizar con JSON inválido
-  Hauyna::WebSocket::Presence.update("user123", {
-    "metadata" => JSON::Any.new("{ invalid json }")
-  })
-rescue ex
-  # El sistema manejará el error y establecerá el estado apropiado
-  presence = Hauyna::WebSocket::Presence.get_presence("user123")
-  puts "Estado: #{presence["state"]}"  # Mostrará "error"
-  if metadata = presence["metadata"]?
-    error_data = JSON.parse(metadata.as_s)
-    puts "Error: #{error_data["error_message"]}"
+def handle_presence_error(user_id : String)
+  begin
+    if presence = Hauyna::WebSocket::Presence.get_presence(user_id)
+      puts "Estado: #{presence["state"]?.try(&.as_s) || "desconocido"}"
+      
+      if metadata = presence["metadata"]?
+        begin
+          error_data = JSON.parse(metadata.as_s)
+          puts "Error: #{error_data["error_message"]?.try(&.as_s)}"
+        rescue ex : JSON::ParseException
+          puts "Error al parsear metadata: #{ex.message}"
+        end
+      end
+    else
+      puts "Usuario #{user_id} no encontrado"
+    end
+  rescue ex : Exception
+    puts "Error al obtener presencia: #{ex.message}"
   end
 end
 
-# Monitoreo de cambios de presencia con estados consistentes
+# Monitoreo de cambios de presencia
 Hauyna::WebSocket::Events.on("presence_change") do |socket, data|
-  case data["event"]?.try(&.as_s)
+  event_type = data["event"]?.try(&.as_s) || "unknown"
+  user_id = data["user_id"]?.try(&.as_s) || "unknown"
+  status = data["status"]?.try(&.as_s) || "unknown"
+  
+  case event_type
   when "join"
-    puts "Usuario #{data["user_id"]} se unió con estado #{data["status"]}"
+    puts "Usuario #{user_id} se unió con estado #{status}"
   when "leave"
-    puts "Usuario #{data["user_id"]} se fue"
+    puts "Usuario #{user_id} se fue"
   when "update"
-    puts "Usuario #{data["user_id"]} cambió su estado a #{data["status"]}"
+    puts "Usuario #{user_id} cambió su estado a #{status}"
   when "error"
-    puts "Error en presencia: #{data["error_message"]}"
+    error_msg = data["error_message"]?.try(&.as_s) || "Error desconocido"
+    puts "Error en presencia: #{error_msg}"
+  else
+    puts "Evento desconocido: #{event_type}"
   end
 end
+
+# Configurar el router y servidor
+router = Hauyna::WebSocket::Router.new
+router.websocket "/ws", handler
+
+server = HTTP::Server.new do |context|
+  router.call(context)
+end
+
+puts "Servidor iniciado en http://localhost:8080"
+server.listen(8080)
 
 # Características del sistema de presencia mejorado:
 # - Gestión centralizada con PresenceManager
@@ -481,28 +530,46 @@ end
 
 ## Sistema de Limpieza Optimizado
 
-### Configuración Básica
+### Configuración Dinámica
 
 ```crystal
-require "hauyna-web-socket"
-
-# Configuración básica del sistema de limpieza
-handler = Hauyna::WebSocket::Handler.new(
-  cleanup_batch_size: 50,        # Tamaño del lote de procesamiento
-  cleanup_interval: 0.1,         # Intervalo entre lotes (segundos)
-  max_cleanup_retries: 3,        # Máximo de reintentos
-  on_cleanup_error: ->(error : Exception) {
-    Log.error { "Error durante limpieza: #{error.message}" }
-  }
+# Configurar el sistema de limpieza con valores personalizados
+config = Hauyna::WebSocket::CleanupConfig.new(
+  batch_size: 50,     # Número máximo de canales a procesar por lote
+  queue_size: 1000,   # Tamaño máximo de la cola de limpieza
+  interval: 0.1,      # Intervalo entre procesamiento de lotes (segundos)
+  max_retries: 3      # Máximo número de reintentos por operación
 )
+
+# Aplicar la configuración
+Hauyna::WebSocket::Channel.configure_cleanup(config)
+
+# Obtener la configuración actual
+current_config = Hauyna::WebSocket::Channel.cleanup_config
+puts "Tamaño de lote actual: #{current_config.batch_size}"
 ```
 
 ### Monitoreo y Métricas
 
 ```crystal
-# Obtener métricas en tiempo real
-metrics = Channel.cleanup_metrics
 
+# Métodos de notificación y escalamiento
+def notify_admin(message : String)
+  # Por ejemplo: enviar email, mensaje a Slack, etc.
+  puts "[ALERTA ADMIN] #{message}"
+end
+
+def scale_resources(reason : String)
+  # Por ejemplo: aumentar workers, memoria, etc.
+  puts "[ESCALAMIENTO] #{reason}"
+end
+
+# Definir umbrales de alerta
+threshold = 100           # Umbral de errores permitidos
+max_queue_size = 1000     # Tamaño máximo permitido de la cola
+
+# Obtener métricas en tiempo real
+metrics = Hauyna::WebSocket::Channel.cleanup_metrics
 # Monitorear operaciones
 puts "Estado del sistema de limpieza:"
 puts "✓ Operaciones procesadas: #{metrics[:processed_count]}"
@@ -518,34 +585,7 @@ end
 if metrics[:queue_size] > max_queue_size
   scale_resources("Cola de limpieza saturada")
 end
-```
 
-### Manejo de Errores y Reintentos
-
-```crystal
-# Configurar manejo de errores personalizado
-handler = Hauyna::WebSocket::Handler.new(
-  on_cleanup_error: ->(error : Exception, operation : CleanupOperation) {
-    case error
-    when IO::Error
-      Log.error { "Error de E/S durante limpieza: #{error.message}" }
-      notify_admin("Error crítico de limpieza")
-    when Socket::Error
-      Log.warn { "Error de socket: #{error.message}" }
-      retry_operation(operation)
-    else
-      Log.error { "Error no esperado: #{error.message}" }
-    end
-  },
-  
-  # Política de reintentos personalizada
-  cleanup_retry_policy: {
-    max_attempts: 5,
-    base_delay: 1.seconds,
-    max_delay: 30.seconds,
-    backoff_multiplier: 2.0
-  }
-)
 ```
 
 ### Procesamiento por Lotes

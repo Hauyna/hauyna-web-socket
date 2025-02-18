@@ -1,11 +1,34 @@
 module Hauyna
   module WebSocket
+    # Configuración dinámica de limpieza
+    class CleanupConfig
+      property batch_size : Int32
+      property queue_size : Int32
+      property interval : Float64
+      property max_retries : Int32
+
+      def initialize(
+        @batch_size = 50,    # Número máximo de canales a procesar por lote
+        @queue_size = 1000,  # Tamaño máximo de la cola de limpieza
+        @interval = 0.1,     # Intervalo entre procesamiento de lotes (segundos)
+        @max_retries = 3     # Máximo número de reintentos por operación
+      )
+      end
+    end
+
     class Channel
-      # Constantes de configuración
-      private CLEANUP_BATCH_SIZE    = 50    # Número máximo de canales a procesar por lote
-      private CLEANUP_QUEUE_SIZE    = 1000  # Tamaño máximo de la cola de limpieza
-      private CLEANUP_INTERVAL      = 0.1   # Intervalo entre procesamiento de lotes (segundos)
-      private MAX_CLEANUP_RETRIES   = 3     # Máximo número de reintentos por operación
+      # Instancia de configuración
+      @@cleanup_config = CleanupConfig.new
+
+      # Método para actualizar la configuración
+      def self.configure_cleanup(config : CleanupConfig)
+        @@cleanup_config = config
+      end
+
+      # Método para obtener la configuración actual
+      def self.cleanup_config
+        @@cleanup_config
+      end
 
       # Lock-free queue para operaciones
       private class LockFreeQueue(T)
@@ -158,7 +181,7 @@ module Hauyna
         end
 
         def max_retries_reached?
-          @retries >= MAX_CLEANUP_RETRIES
+          @retries >= @@cleanup_config.max_retries
         end
       end
 
@@ -376,7 +399,7 @@ module Hauyna
           end
 
           process_cleanup_batch(batch)
-          sleep CLEANUP_INTERVAL
+          sleep @@cleanup_config.interval
         end
       end
 
@@ -384,7 +407,7 @@ module Hauyna
       private def self.get_next_batch
         @@cleanup_mutex.synchronize do
           batch = [] of CleanupOperation
-          while batch.size < CLEANUP_BATCH_SIZE && !@@cleanup_queue.empty?
+          while batch.size < @@cleanup_config.batch_size && !@@cleanup_queue.empty?
             batch << @@cleanup_queue.pop
           end
           update_metric(:queue_size, @@cleanup_queue.empty? ? 0 : @@cleanup_queue.size)
